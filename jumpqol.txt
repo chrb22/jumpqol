@@ -1,0 +1,225 @@
+"Games"
+{
+    "tf"
+    {
+        "Signatures"
+        {
+            "Physics_SimulateEntity"
+            {
+                "library"   "server"
+                "linux"     "@_Z22Physics_SimulateEntityP11CBaseEntity"
+            }
+
+            "CGameServer::SendClientMessages"
+            {
+                "library"   "engine"
+                "linux"     "@_ZN11CGameServer18SendClientMessagesEb"
+            }
+
+            "SV_ComputeClientPacks"
+            {
+                "library"   "engine"
+                "linux"     "@_Z21SV_ComputeClientPacksiPP11CGameClientP14CFrameSnapshot"
+            }
+
+            "CGameClient::SendSnapshot"
+            {
+                "library"   "engine"
+                "linux"     "@_ZN11CGameClient12SendSnapshotEP12CClientFrame"
+            }
+
+            "gpGlobals"
+            {
+                "library"   "server"
+                "linux"     "@gpGlobals"
+            }
+
+            "te"
+            {
+                "library"   "server"
+                "linux"     "@te"
+            }
+
+            "framesnapshotmanager"
+            {
+                "library"   "engine"
+                "linux"     "@framesnapshotmanager"
+            }
+
+            "IMoveHelper::sm_pSingleton"
+            {
+                "library"   "server"
+                "linux"     "@_ZN11IMoveHelper13sm_pSingletonE"
+            }
+
+            "g_PropTypeFns"
+            {
+                "library"   "engine"
+                "linux"     "@g_PropTypeFns"
+            }
+
+            "UTIL_DecalTrace"
+            {
+                "library"   "server"
+                "linux"     "@_Z15UTIL_DecalTraceP10CGameTracePKc"
+            }
+
+            "CTFWeaponBase::ItemBusyFrame"
+            {
+                "library"   "server"
+                "linux"     "@_ZN13CTFWeaponBase13ItemBusyFrameEv"
+            }
+
+            "CTFWeaponBase::ItemPostFrame"
+            {
+                "library"   "server"
+                "linux"     "@_ZN13CTFWeaponBase13ItemPostFrameEv"
+            }
+
+            "CTFWeaponBase::SetReloadTimer"
+            {
+                "library"   "server"
+                "linux"     "@_ZN13CTFWeaponBase14SetReloadTimerEf"
+            }
+
+            "CTFGameMovement::SetGroundEntity"
+            {
+                "library"   "server"
+                "linux"     "@_ZN15CTFGameMovement15SetGroundEntityEP10CGameTrace"
+            }
+
+            "CM_ClipBoxToBrush<false>"
+            {
+                "library"   "engine"
+                "linux"     "@_Z17CM_ClipBoxToBrushILb0EEvP11TraceInfo_tPK8cbrush_t"
+            }
+
+            "CTFWeaponBaseGun::FirePipeBomb"
+            {
+                "library"   "server"
+                "linux"     "@_ZN16CTFWeaponBaseGun12FirePipeBombEP9CTFPlayeri"
+            }
+
+            "CTFWeaponBaseGun::FirePipeBomb rand right"
+            {
+                "library"   "server"
+                // A1 ? ? ? ? D9 9D 9C FE FF FF F3 0F 10 A5 9C FE FF FF
+                "linux"     "\xA1\x2A\x2A\x2A\x2A\xD9\x9D\x9C\xFE\xFF\xFF\xF3\x0F\x10\xA5\x9C\xFE\xFF\xFF"
+            }
+
+            "CTFWeaponBaseGun::FirePipeBomb rand up"
+            {
+                "library"   "server"
+                // A1 ? ? ? ? D9 9D 9C FE FF FF F3 0F 10 B5 F8 FE FF FF
+                "linux"     "\xA1\x2A\x2A\x2A\x2A\xD9\x9D\x9C\xFE\xFF\xFF\xF3\x0F\x10\xB5\xF8\xFE\xFF\xFF"
+            }
+
+            "CTFWeaponBaseGun::FirePipeBomb rand yaw"
+            {
+                "library"   "server"
+                // A1 ? ? ? ? D9 9D 9C FE FF FF 8B 10
+                "linux"     "\xA1\x2A\x2A\x2A\x2A\xD9\x9D\x9C\xFE\xFF\xFF\x8B\x10"
+            }
+        }
+
+        "Offsets"
+        {
+            "CBaseCombatWeapon::ItemPostFrame"
+            {
+                "windows"   "269"
+                "linux"     "275"
+            }
+        }
+
+        "Addresses"
+        {
+            "gpGlobals"
+            {
+                "signature" "gpGlobals"
+                "read"      "0"
+            }
+
+            "te"
+            {
+                "signature" "te"
+                "read"      "0"
+            }
+
+            "framesnapshotmanager"
+            {
+                "signature" "framesnapshotmanager"
+                "read"      "0"
+            }
+
+            "IMoveHelper::sm_pSingleton"
+            {
+                "signature" "IMoveHelper::sm_pSingleton"
+            }
+
+            "g_PropTypeFns"
+            {
+                "signature" "g_PropTypeFns"
+            }
+
+            "CTFWeaponBaseGun::FirePipeBomb rand right max"
+            {
+                "signature" "CTFWeaponBaseGun::FirePipeBomb rand right"
+                "linux"
+                {
+                    // 0x4FA - 0x4DA + 0x4 = 36
+                    "offset"      "36"
+                }
+            }
+
+            "CTFWeaponBaseGun::FirePipeBomb rand right min"
+            {
+                "signature" "CTFWeaponBaseGun::FirePipeBomb rand right"
+                "linux"
+                {
+                    // 0x502 - 0x4DA + 0x4 = 44
+                    "offset"      "44"
+                }
+            }
+
+            "CTFWeaponBaseGun::FirePipeBomb rand up max"
+            {
+                "signature" "CTFWeaponBaseGun::FirePipeBomb rand up"
+                "linux"
+                {
+                    // 0x53D - 0x50D + 0x4 = 52
+                    "offset"      "52"
+                }
+            }
+
+            "CTFWeaponBaseGun::FirePipeBomb rand up min"
+            {
+                "signature" "CTFWeaponBaseGun::FirePipeBomb rand up"
+                "linux"
+                {
+                    // 0x54D - 0x50D + 0x4 = 68
+                    "offset"      "68"
+                }
+            }
+
+            "CTFWeaponBaseGun::FirePipeBomb rand yaw max"
+            {
+                "signature" "CTFWeaponBaseGun::FirePipeBomb rand yaw"
+                "linux"
+                {
+                    // 0x67A - 0x66D + 0x4 = 17
+                    "offset"      "17"
+                }
+            }
+
+            "CTFWeaponBaseGun::FirePipeBomb rand yaw min"
+            {
+                "signature" "CTFWeaponBaseGun::FirePipeBomb rand yaw"
+                "linux"
+                {
+                    // 0x682 - 0x66D + 0x4 = 25
+                    "offset"      "25"
+                }
+            }
+        }
+    }
+}
