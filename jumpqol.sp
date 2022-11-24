@@ -562,7 +562,6 @@ enum
 {
     DETOUR_PHYSICS_SIMULATEENTITY,
     DETOUR_ITEMPOSTFRAME,
-    DETOUR_SETRELOADTIMER,
     DETOUR_FIREPIPEBOMB,
     DETOUR_UTIL_DECALTRACE,
     DETOUR_ITEMBUSYFRAME,
@@ -851,6 +850,11 @@ enum struct Setting
 
     SettingAllow ChangeValue(int client, any value, bool setpref = true, bool force = false) {
         SetError("");
+
+        if (!this.working) {
+            SetError("This setting is unavailable.");
+            return SETTING_ERROR;
+        }
 
         SettingAllow allow = SETTING_ALLOW;
         if (!force) {
@@ -1418,7 +1422,7 @@ methodmap Session
         this.Clear();
 
         if (IsClientInGame(this.client))
-            this.OnPutInServer();
+            this.OnConnected();
     }
 
     public void Clear()
@@ -1432,7 +1436,7 @@ methodmap Session
             g_settings[setting].ChangeValue(this.client, g_settings[setting].prefs[this.client]);
     }
 
-    public void OnPutInServer()
+    public void OnConnected()
     {
         if (IsFakeClient(this.client))
             return;
@@ -1629,9 +1633,9 @@ _event
 
 
 
-public void OnClientPutInServer(int client)
+public void OnClientConnected(int client)
 {
-    g_sessions[client].OnPutInServer();
+    g_sessions[client].OnConnected();
 }
 
 public void OnClientDisconnect(int client)
@@ -1686,11 +1690,6 @@ public void OnPluginStart()
         "CTFWeaponBase::ItemPostFrame",
         CallConv_THISCALL, ReturnType_Void, ThisPointer_CBaseEntity,
         {HookParamType_Unknown}
-    );
-    g_detours[DETOUR_SETRELOADTIMER].Init(
-        "CTFWeaponBase::SetReloadTimer",
-        CallConv_THISCALL, ReturnType_Void, ThisPointer_CBaseEntity,
-        {HookParamType_Float, HookParamType_Unknown}
     );
     g_detours[DETOUR_FIREPIPEBOMB].Init(
         "CTFWeaponBaseGun::FirePipeBomb",
@@ -2677,24 +2676,12 @@ bool Reloadfire_Start()
     if (!g_detours[DETOUR_ITEMBUSYFRAME].Enable(_, Reloadfire_Detour_Post_CTFWeaponBase__ItemBusyFrame))
         return false;
 
-    // if (!g_detours[DETOUR_ITEMPOSTFRAME].Enable(_, Reloadfire_Detour_Post_CTFWeaponBase__ItemPostFrame))
-    //     return false;
-
-    // if (!g_detours[DETOUR_SETRELOADTIMER].Enable(Reloadfire_Detour_Pre_CTFWeaponBase__SetReloadTimer, _))
-    //     return false;
-
-    // if (!g_detours[DETOUR_SENDCLIENTMESSAGES].Enable(Reloadfire_Detour_Pre_CGameServer__SendClientMessages, Reloadfire_Detour_Post_CGameServer__SendClientMessages))
-    //     return false;
-
     return true;
 }
 
 void Reloadfire_Stop()
 {
     g_detours[DETOUR_ITEMBUSYFRAME].Disable(_, Reloadfire_Detour_Post_CTFWeaponBase__ItemBusyFrame);
-    // g_detours[DETOUR_ITEMPOSTFRAME].Disable(_, Reloadfire_Detour_Post_CTFWeaponBase__ItemPostFrame);
-    // g_detours[DETOUR_SETRELOADTIMER].Disable(Reloadfire_Detour_Pre_CTFWeaponBase__SetReloadTimer, _);
-    // g_detours[DETOUR_SENDCLIENTMESSAGES].Disable(Reloadfire_Detour_Pre_CGameServer__SendClientMessages, Reloadfire_Detour_Post_CGameServer__SendClientMessages);
 }
 
 MRESReturn Reloadfire_Detour_Post_CTFWeaponBase__ItemBusyFrame(int entity)
@@ -3839,6 +3826,9 @@ void FindProjectileBitOffsets(int client, int index)
 
 bool Fakedelay_Init()
 {
+    if (FindConVar("sv_parallel_sendsnapshot").BoolValue == true)
+        return SetError("ConVar sv_parallel_sendsnapshot must be set to 0.");
+
     g_framesnapshotmanager = view_as<CFrameSnapshotManager>(GameConfGetAddress(g_gameconf, "framesnapshotmanager"));
     if (!g_framesnapshotmanager)
         return SetError("Failed to find framesnapshotmanager.");

@@ -76,12 +76,6 @@
                 "linux"     "@_ZN13CTFWeaponBase13ItemPostFrameEv"
             }
 
-            "CTFWeaponBase::SetReloadTimer"
-            {
-                "library"   "server"
-                "linux"     "@_ZN13CTFWeaponBase14SetReloadTimerEf"
-            }
-
             "CTFGameMovement::SetGroundEntity"
             {
                 "library"   "server"
