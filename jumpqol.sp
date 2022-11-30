@@ -1470,8 +1470,8 @@ methodmap Session
             g_findprojs[entity].client = -1;
             g_findprojs[entity].index = -1;
 
-            CloseHandle(g_projs[this.client][i + 1].predictions);
-            g_projs[this.client][i + 1].predictions = null;
+            CloseHandle(g_projs[this.client][i].predictions);
+            g_projs[this.client][i].predictions = null;
         }
 
         g_numprojs[this.client] = 0;
@@ -1514,6 +1514,9 @@ methodmap Session
 
         g_findprojs[entity].client = -1;
         g_findprojs[entity].index = -1;
+
+        CloseHandle(g_projs[this.client][index].predictions);
+        g_projs[this.client][index].predictions = null;
 
         for (int i = index; i < g_numprojs[this.client] - 1; i++) {
             g_projs[this.client][i] = g_projs[this.client][i + 1];
@@ -2642,18 +2645,6 @@ _reloadfire
 
 
 
-enum struct WeaponNext
-{
-    int entity;
-    float m_flNextAttack;
-    float m_flNextPrimaryAttack;
-}
-WeaponNext g_weaponnext[MAXPLAYERS+1];
-
-
-
-
-
 Handle g_Call_ItemPostFrame;
 bool Reloadfire_Init()
 {
@@ -2664,9 +2655,6 @@ bool Reloadfire_Init()
     g_Call_ItemPostFrame = EndPrepSDKCall();
     if (g_Call_ItemPostFrame == INVALID_HANDLE)
         return SetError("Failed to prepare CBaseCombatWeapon::ItemPostFrame call.");
-
-    for (int client = 1; client <= MaxClients; client++)
-        g_weaponnext[client].entity = -1;
 
     return true;
 }
@@ -2751,8 +2739,10 @@ MRESReturn Attack2fire_Detour_Pre_CTFWeaponBase__ItemPostFrame(int entity)
     )
         return MRES_Ignored;
 
-    float m_flNextSecondaryAttack = GetEntPropFloat(entity, Prop_Send, "m_flNextSecondaryAttack");
-    SetEntPropFloat(entity, Prop_Send, "m_flNextSecondaryAttack", m_flNextSecondaryAttack + 5.0);
+    if (GetEntProp(entity, Prop_Data, "m_iClip1") != 0)
+        SetEntPropFloat(entity, Prop_Send, "m_flNextSecondaryAttack", g_globals.curtime + 0.5);
+    else
+        SetEntPropFloat(entity, Prop_Send, "m_flNextSecondaryAttack", g_globals.curtime - g_globals.interval_per_tick);
 
     return MRES_Handled;
 }
