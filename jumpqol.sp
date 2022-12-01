@@ -1256,7 +1256,11 @@ enum struct Projectile
         int update_last = this.update_base + this.predictions.Length - 1;
 
         // Ensure there is a constant buffer if we are activly getting states
-        if (update_last - update < NUM_PREDICTIONS) {
+        if (update > update_last) {
+            this.PredictStatesUpto(this.frame_base + update + NUM_PREDICTIONS);
+            update_last = this.update_base + this.predictions.Length - 1;
+        }
+        else if (update_last - update < NUM_PREDICTIONS) {
             this.PredictStatesUpto(this.frame_base + update_last + NUM_PREDICTIONS);
             update_last = this.update_base + this.predictions.Length - 1;
         }
@@ -1381,6 +1385,26 @@ void CallbackCmdrate(QueryCookie cookie, int client, ConVarQueryResult result, c
     g_cmdrate[client] = cmdrate;
 }
 
+// Following UTIL_GetPlayerConnectionInfo
+float GetLatency(int client)
+{
+    return GetClientAvgLatency(client, NetFlow_Outgoing) - 0.5/g_cmdrate[client] - 1.0*g_globals.interval_per_tick - 0.5*g_globals.interval_per_tick;
+}
+
+int GetDelay(int client)
+{
+    int m_fLerpTime_offset = GetEntSendPropOffs(client, "m_fOnTarget", true) + 40; // m_fLerpTime is 40 bytes after m_fOnTarget
+    float interp = GetEntDataFloat(client, m_fLerpTime_offset);
+
+    // Following UTIL_GetPlayerConnectionInfo
+    float latency = GetLatency(client);
+
+    int latency_frames = latency > 0.0 ? RoundToCeil(latency / g_globals.interval_per_tick) : 1;
+    int interp_frames = RoundToNearest(interp / g_globals.interval_per_tick);
+
+    return latency_frames + interp_frames;
+}
+
 
 
 
@@ -1397,23 +1421,6 @@ methodmap Session
         public get()
         {
             return view_as<int>(this);
-        }
-    }
-
-    property int cmdrate
-    {
-        public get()
-        {
-            return g_cmdrate[this.client];
-        }
-    }
-
-    property float interp
-    {
-        public get()
-        {
-            int m_fLerpTime_offset = GetEntSendPropOffs(this.client, "m_fOnTarget", true) + 40; // m_fLerpTime is 40 bytes after m_fOnTarget
-            return GetEntDataFloat(this.client, m_fLerpTime_offset);
         }
     }
 
@@ -4003,19 +4010,7 @@ MRESReturn Fakedelay_Detour_Pre_CGameClient__SendSnapshot(Address pThis, DHookPa
     if (g_sessions[client].fakedelay < 0)
         return MRES_Ignored;
 
-    int fakedelay = g_sessions[client].fakedelay;
-
-    float interp = g_sessions[client].interp;
-    int cmdrate = g_cmdrate[client];
-
-    // Following UTIL_GetPlayerConnectionInfo
-    float latency = GetClientAvgLatency(client, NetFlow_Both) - 0.5/cmdrate - 1.0*g_globals.interval_per_tick - 0.5*g_globals.interval_per_tick;
-
-    int latency_frames = latency > 0.0 ? RoundToCeil(latency / g_globals.interval_per_tick) : 1;
-    int interp_frames = RoundToNearest(interp / g_globals.interval_per_tick);
-    int fake_frames = RoundToCeil(fakedelay / 1000.0 / g_globals.interval_per_tick);
-
-    int frame = g_tickcount_frame + latency_frames + interp_frames - fake_frames;
+    int frame = g_tickcount_frame + GetDelay(client) - g_sessions[client].fakedelay;
 
     for (int i = 0; i < g_numprojs[client]; i++) {
         if (!IsValidEntity(g_projs[client][i].entity))
