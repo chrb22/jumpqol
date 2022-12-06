@@ -1428,8 +1428,10 @@ methodmap Session
     {
         this.Clear();
 
-        if (IsClientInGame(this.client))
+        if (IsClientInGame(this.client)) {
             this.OnConnected();
+            this.OnPutInServer();
+        }
     }
 
     public void Clear()
@@ -1450,13 +1452,19 @@ methodmap Session
 
         this.Clear();
 
-        RequestCmdrate(this.client);
-
         for (int setting = 0; setting < NUM_SETTINGS; setting++)
             if (g_settings[setting].working)
                 g_settings[setting].prefs[this.client] = g_settings[setting].GetDefault();
 
         this.ApplyPreferences();
+    }
+
+    public void OnPutInServer()
+    {
+        if (IsFakeClient(this.client))
+            return;
+
+        RequestCmdrate(this.client);
     }
 
     public void OnDisconnect()
@@ -1646,6 +1654,11 @@ _event
 public void OnClientConnected(int client)
 {
     g_sessions[client].OnConnected();
+}
+
+public void OnClientPutInServer(int client)
+{
+    g_sessions[client].OnPutInServer();
 }
 
 public void OnClientDisconnect(int client)
