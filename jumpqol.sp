@@ -2237,7 +2237,7 @@ void OnProjectileSpawnPost(int entity)
 
 public void OnEntityDestroyed(int entity)
 {
-    if (entity < 0)
+    if (!IsValidEntity(entity))
         return;
 
     int client = g_findprojs[entity].client;
@@ -2252,7 +2252,7 @@ public void OnEntityDestroyed(int entity)
 MRESReturn Required_Detour_Pre_Physics_SimulateEntity(DHookParam hParams)
 {
     int entity = DHookGetParam(hParams, 1);
-    if (entity < 0)
+    if (!IsValidEntity(entity))
         return MRES_Ignored;
 
     g_entity_simulating = entity;
@@ -2265,7 +2265,7 @@ MRESReturn Required_Detour_Pre_Physics_SimulateEntity(DHookParam hParams)
 MRESReturn Required_Detour_Post_Physics_SimulateEntity(DHookParam hParams)
 {
     int entity = DHookGetParam(hParams, 1);
-    if (entity < 0)
+    if (!IsValidEntity(entity))
         return MRES_Ignored;
 
     g_entity_simulating = -1;
@@ -3369,7 +3369,7 @@ void Sync_OnPlayerRunCmdPost(int client)
 MRESReturn Sync_Detour_Pre_Physics_SimulateEntity(DHookParam hParams)
 {
     int entity = DHookGetParam(hParams, 1);
-    if (entity < 0)
+    if (!IsValidEntity(entity))
         return MRES_Ignored;
 
     int client = g_findprojs[entity].client;
