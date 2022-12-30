@@ -2237,7 +2237,7 @@ void OnProjectileSpawnPost(int entity)
 
 public void OnEntityDestroyed(int entity)
 {
-    if (!IsValidEntity(entity))
+    if (!IsValidEdict(entity))
         return;
 
     int client = g_findprojs[entity].client;
@@ -2252,7 +2252,7 @@ public void OnEntityDestroyed(int entity)
 MRESReturn Required_Detour_Pre_Physics_SimulateEntity(DHookParam hParams)
 {
     int entity = DHookGetParam(hParams, 1);
-    if (!IsValidEntity(entity))
+    if (!IsValidEdict(entity))
         return MRES_Ignored;
 
     g_entity_simulating = entity;
@@ -2265,7 +2265,7 @@ MRESReturn Required_Detour_Pre_Physics_SimulateEntity(DHookParam hParams)
 MRESReturn Required_Detour_Post_Physics_SimulateEntity(DHookParam hParams)
 {
     int entity = DHookGetParam(hParams, 1);
-    if (!IsValidEntity(entity))
+    if (!IsValidEdict(entity))
         return MRES_Ignored;
 
     g_entity_simulating = -1;
@@ -3334,7 +3334,7 @@ void Sync_OnPlayerRunCmdPost(int client)
     g_allow_update = true;
 
     for (int i = 0; i < g_numprojs[client]; i++) {
-        if (!IsValidEntity(g_projs[client][i].entity))
+        if (!IsValidEdict(g_projs[client][i].entity))
                 continue;
 
         if (!g_projs[client][i].IsMoveTypeSupported())
@@ -3369,7 +3369,7 @@ void Sync_OnPlayerRunCmdPost(int client)
 MRESReturn Sync_Detour_Pre_Physics_SimulateEntity(DHookParam hParams)
 {
     int entity = DHookGetParam(hParams, 1);
-    if (!IsValidEntity(entity))
+    if (!IsValidEdict(entity))
         return MRES_Ignored;
 
     int client = g_findprojs[entity].client;
@@ -3401,7 +3401,7 @@ MRESReturn Sync_Detour_Pre_CGameServer__SendClientMessages(Address pThis, DHookP
             continue;
 
         for (int i = 0; i < g_numprojs[client]; i++) {
-            if (!IsValidEntity(g_projs[client][i].entity))
+            if (!IsValidEdict(g_projs[client][i].entity))
                 continue;
 
             if (!g_projs[client][i].IsMoveTypeSupported())
@@ -3425,7 +3425,7 @@ MRESReturn Sync_Detour_Post_CGameServer__SendClientMessages(Address pThis, DHook
             continue;
 
         for (int i = 0; i < g_numprojs[client]; i++) {
-            if (!IsValidEntity(g_projs[client][i].entity))
+            if (!IsValidEdict(g_projs[client][i].entity))
                 continue;
 
             if (!g_projs[client][i].IsMoveTypeSupported())
@@ -3901,7 +3901,7 @@ MRESReturn Fakedelay_Detour_Pre_SV_ComputeClientPacks(Address pThis, DHookParam 
             continue;
 
         for (int i = 0; i < g_numprojs[client]; i++) {
-            if (!IsValidEntity(g_projs[client][i].entity))
+            if (!IsValidEdict(g_projs[client][i].entity))
                 continue;
 
             if (!g_projs[client][i].IsMoveTypeSupported())
@@ -3956,7 +3956,7 @@ MRESReturn Fakedelay_Detour_Post_SV_ComputeClientPacks(Address pThis, DHookParam
             continue;
 
         for (int i = 0; i < g_numprojs[client]; i++) {
-            if (!IsValidEntity(g_projs[client][i].entity))
+            if (!IsValidEdict(g_projs[client][i].entity))
                 continue;
 
             if (!g_projs[client][i].IsMoveTypeSupported())
@@ -4026,7 +4026,7 @@ MRESReturn Fakedelay_Detour_Pre_CGameClient__SendSnapshot(Address pThis, DHookPa
     int frame = g_tickcount_frame + GetDelay(client) - g_sessions[client].fakedelay;
 
     for (int i = 0; i < g_numprojs[client]; i++) {
-        if (!IsValidEntity(g_projs[client][i].entity))
+        if (!IsValidEdict(g_projs[client][i].entity))
             continue;
 
         if (!g_projs[client][i].IsMoveTypeSupported())
@@ -4089,7 +4089,7 @@ MRESReturn Fakedelay_Detour_Post_CGameClient__SendSnapshot(Address pThis, DHookP
         return MRES_Ignored;
 
     for (int i = 0; i < g_numprojs[client]; i++) {
-        if (!IsValidEntity(g_projs[client][i].entity))
+        if (!IsValidEdict(g_projs[client][i].entity))
             continue;
         
         if (!g_projs[client][i].IsMoveTypeSupported())
