@@ -2865,11 +2865,11 @@ _slideebfix
 
 
 
-Address g_movehelper;
+Address g_slideebfix_movehelper;
 bool Slideebfix_Init()
 {
-    g_movehelper = GameConfGetAddress(g_gameconf, "IMoveHelper::sm_pSingleton");
-    if (!g_movehelper)
+    g_slideebfix_movehelper = GameConfGetAddress(g_gameconf, "IMoveHelper::sm_pSingleton");
+    if (!g_slideebfix_movehelper)
         return SetError("Failed to find IMoveHelper::sm_pSingleton.");
 
     return true;
@@ -2916,11 +2916,11 @@ MRESReturn Slideebfix_Detour_Pre_CTFGameMovement__SetGroundEntity(Address pThis,
     float gravity = GetGravity(client);
 
 
-    int m_TouchList_m_Size = LoadFromAddress(g_movehelper + view_as<Address>(8) + view_as<Address>(16), NumberType_Int32);
+    int m_TouchList_m_Size = LoadFromAddress(g_slideebfix_movehelper + view_as<Address>(8) + view_as<Address>(16), NumberType_Int32);
     if (m_TouchList_m_Size == 0)
         return MRES_Ignored; // No collisions during this tick
 
-    Address m_TouchList_m_pElements = LoadFromAddress(g_movehelper + view_as<Address>(8) + view_as<Address>(20), NumberType_Int32);
+    Address m_TouchList_m_pElements = LoadFromAddress(g_slideebfix_movehelper + view_as<Address>(8) + view_as<Address>(20), NumberType_Int32);
 
     Trace trace_slide = Trace(m_TouchList_m_pElements + view_as<Address>(0*96) + view_as<Address>(12));
     Trace trace_bottom = Trace(DHookGetParamAddress(hParams, 1));
@@ -3277,6 +3277,7 @@ _sync
 
 Handle g_Call_Physics_SimulateEntity;
 IPredictionSystem g_sync_te;
+Address g_sync_movehelper;
 bool Sync_Init()
 {
     StartPrepSDKCall(SDKCall_Static);
@@ -3292,6 +3293,10 @@ bool Sync_Init()
     g_sync_te = IPredictionSystem(GameConfGetAddress(g_gameconf, "te"));
     if (!g_sync_te)
         return SetError("Failed to find te.");
+
+    g_sync_movehelper = GameConfGetAddress(g_gameconf, "IMoveHelper::sm_pSingleton");
+    if (!g_sync_movehelper)
+        return SetError("Failed to find IMoveHelper::sm_pSingleton.");
 
     return true;
 }
@@ -3360,6 +3365,7 @@ void Sync_OnPlayerRunCmdPost(int client)
 
     // Set simulating entity back to the client
     g_entity_simulating = client;
+    StoreToAddress(g_sync_movehelper + view_as<Address>(4), GetEntityAddress(client), NumberType_Int32);
 
     g_globals.curtime = curtime_player;
     g_globals.frametime = frametime_player;
