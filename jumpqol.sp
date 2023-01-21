@@ -2216,7 +2216,13 @@ public void OnGameFrame()
 
 public void OnEntityCreated(int entity, const char[] classname)
 {
-    if (strncmp(classname, "tf_projectile_", 14) != 0)
+    // if (strncmp(classname, "tf_projectile_", 14) != 0)
+    //     return;
+
+    if (   strcmp(classname, "tf_projectile_rocket") != 0
+        && strcmp(classname, "tf_projectile_energy_ball") != 0
+        && strcmp(classname, "tf_projectile_sentryrocket") != 0
+    )
         return;
 
     SDKHook(entity, SDKHook_SpawnPost, OnProjectileSpawnPost);
