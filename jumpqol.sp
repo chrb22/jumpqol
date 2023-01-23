@@ -1405,37 +1405,6 @@ int GetDelay(int client)
     return latency_frames + interp_frames;
 }
 
-Action Command_Delay(int sender, int args)
-{
-    ReplyToCommand(sender, "name      | tick sec | interp sec | interp tick | cmdrate | latency incoming | latency outgoing | latency both | calced ping");
-    for (int client = 1; client <= MaxClients; client++) {
-        if (!IsClientInGame(client) || IsFakeClient(client))
-            continue;
-
-        char name[11];
-        GetClientName(client, name, 11);
-
-        int m_fLerpTime_offset = GetEntSendPropOffs(client, "m_fOnTarget", true) + 40; // m_fLerpTime is 40 bytes after m_fOnTarget
-        float interp = GetEntDataFloat(client, m_fLerpTime_offset);
-
-        ReplyToCommand(
-            sender,
-            "%s        %.3f        %.3f             %d        %d                %.1f               %.1f           %.1f           %.1f",
-            name,
-            g_globals.interval_per_tick,
-            interp,
-            RoundFloat(interp / g_globals.interval_per_tick),
-            g_cmdrate[client],
-            GetClientAvgLatency(client, NetFlow_Incoming) * 1000.0,
-            GetClientAvgLatency(client, NetFlow_Outgoing) * 1000.0,
-            GetClientAvgLatency(client, NetFlow_Both) * 1000.0,
-            GetLatency(client) * 1000.0
-        );
-    }
-
-    return Plugin_Handled;
-}
-
 
 
 
@@ -1937,7 +1906,7 @@ public void OnPluginStart()
         g_findprojs[entity].index = -1;
     }
 
-    RegConsoleCmd("sm_jumpqol_delay", Command_Delay);
+    RegConsoleCmd("sm_jumpqol_debug_delay", Command_Delay);
 }
 
 
@@ -4170,4 +4139,52 @@ MRESReturn Fakedelay_Detour_Post_CGameClient__SendSnapshot(Address pThis, DHookP
     }
 
     return MRES_Ignored;
+}
+
+
+
+
+
+/*
+_debug
+██████  ███████ ██████  ██    ██  ██████  
+██   ██ ██      ██   ██ ██    ██ ██       
+██   ██ █████   ██████  ██    ██ ██   ███ 
+██   ██ ██      ██   ██ ██    ██ ██    ██ 
+██████  ███████ ██████   ██████   ██████  
+*/
+
+
+
+
+
+Action Command_Delay(int sender, int args)
+{
+    ReplyToCommand(sender, "name      | tick sec | interp sec | interp tick | cmdrate | latency incoming | latency outgoing | latency both | calced ping");
+    for (int client = 1; client <= MaxClients; client++) {
+        if (!IsClientInGame(client) || IsFakeClient(client))
+            continue;
+
+        char name[11];
+        GetClientName(client, name, 11);
+
+        int m_fLerpTime_offset = GetEntSendPropOffs(client, "m_fOnTarget", true) + 40; // m_fLerpTime is 40 bytes after m_fOnTarget
+        float interp = GetEntDataFloat(client, m_fLerpTime_offset);
+
+        ReplyToCommand(
+            sender,
+            "%s        %.3f        %.3f             %d        %d                %.1f               %.1f           %.1f           %.1f",
+            name,
+            g_globals.interval_per_tick,
+            interp,
+            RoundFloat(interp / g_globals.interval_per_tick),
+            g_cmdrate[client],
+            GetClientAvgLatency(client, NetFlow_Incoming) * 1000.0,
+            GetClientAvgLatency(client, NetFlow_Outgoing) * 1000.0,
+            GetClientAvgLatency(client, NetFlow_Both) * 1000.0,
+            GetLatency(client) * 1000.0
+        );
+    }
+
+    return Plugin_Handled;
 }
