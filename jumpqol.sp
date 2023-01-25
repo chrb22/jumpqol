@@ -4039,7 +4039,7 @@ MRESReturn Fakedelay_Detour_Pre_CGameClient__SendSnapshot(Address pThis, DHookPa
     if (g_sessions[client].fakedelay < 0)
         return MRES_Ignored;
 
-    int frame = g_tickcount_frame + GetDelay(client) - g_sessions[client].fakedelay;
+    int frame = g_tickcount_frame + GetDelay(client) - RoundToCeil(g_sessions[client].fakedelay / 1000.0 / g_globals.interval_per_tick);
 
     for (int i = 0; i < g_numprojs[client]; i++) {
         if (!IsValidEdict(g_projs[client][i].entity))
