@@ -1123,8 +1123,12 @@ enum struct ProjectileState
     }
 }
 
-#define NUM_PREDICTIONS 10
+#define NUM_PREDICTIONS 20 // 300 ms prediction in both directions
+#define NUM_BUFFER      (3*NUM_PREDICTIONS)
 #define MAX_PROJECTILES 32
+ProjectileState g_preds[MAXPLAYERS*MAX_PROJECTILES][NUM_BUFFER];
+ArrayList g_pred_indices;
+
 enum struct Projectile
 {
     int entity;
@@ -1136,8 +1140,8 @@ enum struct Projectile
     int frame_base;
     int update;
 
-    int update_base;
-    ArrayList predictions;
+    int buffer;
+    int update_pred;
 
     bool IsMoveTypeSupported()
     {
@@ -1186,21 +1190,28 @@ enum struct Projectile
 
             i++;
         }
-
-        this.Activate();
     }
 
     void Activate()
     {
-        if (IsValidHandle(this.predictions))
-            CloseHandle(this.predictions);
-
         this.frame_base = g_tickcount_frame;
-        this.update_base = 0;
+
+        this.buffer = g_pred_indices.Get(g_pred_indices.Length - 1);
+        g_pred_indices.Resize(g_pred_indices.Length - 1);
 
         this.update = 0;
-        this.predictions = new ArrayList(sizeof(ProjectileState), 0);
         this.StoreCurrentState();
+    }
+
+    void Deactivate()
+    {
+        g_pred_indices.Push(this.buffer);
+        this.buffer = -1;
+    }
+
+    int FrameToUpdate(int frame)
+    {
+        return frame - this.frame_base;
     }
 
     void Update()
@@ -1215,121 +1226,85 @@ enum struct Projectile
         state_current.ReadFrom(this.entity);
         state_current.update = this.update;
 
-        int update_last = this.update_base + this.predictions.Length - 1;
-
-        // Gap in predictions
-        if (state_current.update > update_last) {
-            this.update_base = state_current.update;
-            this.predictions.Clear();
-            this.predictions.PushArray(state_current);
-
-            return;
-        }
-
-        // Purge old states if there are too many
-        if (this.update - this.update_base > 2*NUM_PREDICTIONS) {
-            for (int i = 0; i < NUM_PREDICTIONS; i++)
-                this.predictions.Erase(0);
-
-            this.update_base += NUM_PREDICTIONS;
-        }
-
         ProjectileState state_predicted;
-        this.predictions.GetArray(this.update - this.update_base, state_predicted);
+        state_predicted = g_preds[this.buffer][this.update % NUM_BUFFER];
 
         bool same = true;
+        same &= (state_predicted.update == state_current.update);
         same &= CompareVectors(state_current.pos, state_predicted.pos);
         same &= CompareVectors(state_current.rot, state_predicted.rot);
         same &= CompareVectors(state_current.vel, state_predicted.vel);
         same &= CompareVectors(state_current.angvel, state_predicted.angvel);
 
-        this.predictions.SetArray(this.update - this.update_base, state_current);
+        g_preds[this.buffer][this.update % NUM_BUFFER] = state_current;
 
-        if (!same)
-            this.PredictStatesUpto(this.frame_base + this.update + NUM_PREDICTIONS);
+        if (!same) {
+            ProjectileState state;
+
+            state = state_current;
+            for (int update = this.update - 1; update >= this.update - NUM_PREDICTIONS; update--) {
+                state = this.PredictBackwards(state);
+                g_preds[this.buffer][(update + NUM_BUFFER) % NUM_BUFFER] = state;
+            }
+
+            state = state_current;
+            for (int update = this.update + 1; update <= this.update + NUM_PREDICTIONS; update++) {
+                state = this.PredictForward(state);
+                g_preds[this.buffer][update % NUM_BUFFER] = state;
+            }
+
+            this.update_pred = this.update + NUM_PREDICTIONS;
+        }
+        else {
+            ProjectileState state;
+            state = g_preds[this.buffer][this.update_pred % NUM_BUFFER];
+            state = this.PredictForward(state);
+            g_preds[this.buffer][(this.update_pred + 1) % NUM_BUFFER] = state;
+            this.update_pred++;
+        }
     }
 
     ProjectileState GetState(int frame)
     {
-        int update = frame - this.frame_base;
+        int update = this.FrameToUpdate(frame);
+        if (update < this.update - NUM_PREDICTIONS)
+            update = this.update - NUM_PREDICTIONS;
 
-        int update_last = this.update_base + this.predictions.Length - 1;
+        return g_preds[this.buffer][(update + NUM_BUFFER) % NUM_BUFFER];
+    }
 
-        // Ensure there is a constant buffer if we are activly getting states
-        if (update > update_last) {
-            this.PredictStatesUpto(this.frame_base + update + NUM_PREDICTIONS);
-            update_last = this.update_base + this.predictions.Length - 1;
-        }
-        else if (update_last - update < NUM_PREDICTIONS) {
-            this.PredictStatesUpto(this.frame_base + update_last + NUM_PREDICTIONS);
-            update_last = this.update_base + this.predictions.Length - 1;
-        }
-
-        // Predict backwards
-        if (update < this.update_base) {
-            this.PredictBackwards();
-            update_last = this.update_base + this.predictions.Length - 1;
-        }
-
+    ProjectileState PredictForward(ProjectileState current)
+    {
         ProjectileState state;
-        state.update = this.update;
-        state.ReadFrom(this.entity);
 
-        if (this.update_base <= update && update <= update_last)
-            this.predictions.GetArray(update - this.update_base, state);
+        if (this.movetype == MOVETYPE_FLY) {
+            state.vel = current.vel;
+            state.angvel = current.angvel;
+
+            OffsetVector(current.pos, current.vel, g_globals.interval_per_tick, state.pos);
+            OffsetVector(current.rot, current.angvel, g_globals.interval_per_tick, state.rot);
+
+            state.update = current.update + 1;
+        }
 
         return state;
     }
 
-    void PredictStatesUpto(int frame)
+    ProjectileState PredictBackwards(ProjectileState current)
     {
-        int update = frame - this.frame_base;
-        if (update < this.update_base)
-            return;
+        ProjectileState state;
 
         if (this.movetype == MOVETYPE_FLY) {
-            this.predictions.Resize(update - this.update_base + 1);
+            state.vel = current.vel;
+            state.angvel = current.angvel;
 
-            ProjectileState state;
-            this.predictions.GetArray(this.update - this.update_base, state);
+            OffsetVector(current.pos, current.vel, -g_globals.interval_per_tick, state.pos);
+            OffsetVector(current.rot, current.angvel, -g_globals.interval_per_tick, state.rot);
 
-            for (int i = this.update - this.update_base + 1; i < this.predictions.Length; i++) {
-                OffsetVector(state.pos, state.vel, g_globals.interval_per_tick, state.pos);
-                OffsetVector(state.rot, state.angvel, g_globals.interval_per_tick, state.rot);
-
-                state.update++;
-
-                this.predictions.SetArray(i, state);
-            }
+            state.update = current.update - 1;
         }
-    }
 
-    void PredictBackwards()
-    {
-        if (this.movetype == MOVETYPE_FLY) {
-            int length = this.predictions.Length;
-            this.predictions.Resize(length + NUM_PREDICTIONS);
-
-            for (int i = length - 1; i >= 0; i--) {
-                ProjectileState state_move;
-                this.predictions.GetArray(i, state_move);
-                this.predictions.SetArray(i + NUM_PREDICTIONS, state_move);
-            }
-
-            ProjectileState state;
-            this.predictions.GetArray(NUM_PREDICTIONS, state);
-
-            for (int i = NUM_PREDICTIONS - 1; i >= 0; i--) {
-                OffsetVector(state.pos, state.vel, -g_globals.interval_per_tick, state.pos);
-                OffsetVector(state.rot, state.angvel, -g_globals.interval_per_tick, state.rot);
-
-                state.update--;
-
-                this.predictions.SetArray(i, state);
-            }
-
-            this.update_base -= NUM_PREDICTIONS;
-        }
+        return state;
     }
 }
 Projectile g_projs[MAXPLAYERS+1][MAX_PROJECTILES];
@@ -1481,12 +1456,11 @@ methodmap Session
     public void ClearProjectiles()
     {
         for (int i = 0; i < g_numprojs[this.client]; i++) {
+            g_projs[this.client][i].Deactivate();
+
             int entity = g_projs[this.client][i].entity;
             g_findprojs[entity].client = -1;
             g_findprojs[entity].index = -1;
-
-            CloseHandle(g_projs[this.client][i].predictions);
-            g_projs[this.client][i].predictions = null;
         }
 
         g_numprojs[this.client] = 0;
@@ -1516,6 +1490,7 @@ methodmap Session
         g_numprojs[this.client]++;
 
         g_projs[this.client][index].Init(entity);
+        g_projs[this.client][index].Activate();
 
         return true;
     }
@@ -1527,15 +1502,13 @@ methodmap Session
         if (index == -1)
             return false;
 
+        g_projs[this.client][index].Deactivate();
+
         g_findprojs[entity].client = -1;
         g_findprojs[entity].index = -1;
 
-        CloseHandle(g_projs[this.client][index].predictions);
-        g_projs[this.client][index].predictions = null;
-
         for (int i = index; i < g_numprojs[this.client] - 1; i++) {
             g_projs[this.client][i] = g_projs[this.client][i + 1];
-            g_projs[this.client][i + 1].predictions = null;
             g_findprojs[g_projs[this.client][i].entity].index--;
         }
 
@@ -1905,6 +1878,10 @@ public void OnPluginStart()
         g_findprojs[entity].client = -1;
         g_findprojs[entity].index = -1;
     }
+
+    g_pred_indices = new ArrayList(1, MAXPLAYERS*MAX_PROJECTILES);
+    for (int index = 0; index < MAXPLAYERS*MAX_PROJECTILES; index++)
+        g_pred_indices.Set(index, index);
 }
 
 
