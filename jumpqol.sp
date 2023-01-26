@@ -2067,8 +2067,10 @@ Action Command_Plugin(int client, int args)
 {
     if (args == 0) {
         ReplyToCommand(client, "JumpQoL settings");
+
+        ReplySource source = GetCmdReplySource();
         for (int setting = 0; setting < NUM_SETTINGS; setting++)
-            if (g_settings[setting].working) {
+            if (g_settings[setting].working && (!g_settings[setting].convar_enforce.BoolValue || source == SM_REPLY_TO_CONSOLE)) {
                 char setting_value_string[64];
                 GetSettingValueString(g_settings[setting], client, setting_value_string, 64);
 
