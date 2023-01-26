@@ -1099,7 +1099,7 @@ enum struct ProjectileMessage
 
 enum struct ProjectileState
 {
-    int update;
+    int frame;
 
     float pos[3];
     float rot[3];
@@ -1137,11 +1137,8 @@ enum struct Projectile
 
     ProjectileMessage message;
 
-    int frame_base;
-    int update;
-
+    int frame;
     int buffer;
-    int update_pred;
 
     bool IsMoveTypeSupported()
     {
@@ -1194,13 +1191,10 @@ enum struct Projectile
 
     void Activate()
     {
-        this.frame_base = g_tickcount_frame;
-
         this.buffer = g_pred_indices.Get(g_pred_indices.Length - 1);
         g_pred_indices.Resize(g_pred_indices.Length - 1);
 
-        this.update = 0;
-        this.StoreCurrentState();
+        this.ResetPredictions();
     }
 
     void Deactivate()
@@ -1209,14 +1203,15 @@ enum struct Projectile
         this.buffer = -1;
     }
 
-    int FrameToUpdate(int frame)
+    void ResetPredictions()
     {
-        return frame - this.frame_base;
+        this.frame = g_tickcount_frame;
+        this.StoreCurrentState();
     }
 
     void Update()
     {
-        this.update++;
+        this.frame++;
         this.StoreCurrentState();
     }
 
@@ -1224,53 +1219,51 @@ enum struct Projectile
     {
         ProjectileState state_current;
         state_current.ReadFrom(this.entity);
-        state_current.update = this.update;
+        state_current.frame = this.frame;
 
         ProjectileState state_predicted;
-        state_predicted = g_preds[this.buffer][this.update % NUM_BUFFER];
+        state_predicted = g_preds[this.buffer][this.frame % NUM_BUFFER];
 
         bool same = true;
-        same &= (state_predicted.update == state_current.update);
+        same &= (state_predicted.frame == state_current.frame);
         same &= CompareVectors(state_current.pos, state_predicted.pos);
         same &= CompareVectors(state_current.rot, state_predicted.rot);
         same &= CompareVectors(state_current.vel, state_predicted.vel);
         same &= CompareVectors(state_current.angvel, state_predicted.angvel);
 
-        g_preds[this.buffer][this.update % NUM_BUFFER] = state_current;
+        g_preds[this.buffer][this.frame % NUM_BUFFER] = state_current;
 
         if (!same) {
             ProjectileState state;
 
             state = state_current;
-            for (int update = this.update - 1; update >= this.update - NUM_PREDICTIONS; update--) {
+            for (int pframe = this.frame - 1; pframe >= this.frame - NUM_PREDICTIONS; pframe--) {
                 state = this.PredictBackwards(state);
-                g_preds[this.buffer][(update + NUM_BUFFER) % NUM_BUFFER] = state;
+                g_preds[this.buffer][pframe % NUM_BUFFER] = state;
             }
 
             state = state_current;
-            for (int update = this.update + 1; update <= this.update + NUM_PREDICTIONS; update++) {
+            for (int pframe = this.frame + 1; pframe <= this.frame + NUM_PREDICTIONS; pframe++) {
                 state = this.PredictForward(state);
-                g_preds[this.buffer][update % NUM_BUFFER] = state;
+                g_preds[this.buffer][pframe % NUM_BUFFER] = state;
             }
-
-            this.update_pred = this.update + NUM_PREDICTIONS;
         }
         else {
             ProjectileState state;
-            state = g_preds[this.buffer][this.update_pred % NUM_BUFFER];
+            state = g_preds[this.buffer][(this.frame + NUM_PREDICTIONS - 1) % NUM_BUFFER];
             state = this.PredictForward(state);
-            g_preds[this.buffer][(this.update_pred + 1) % NUM_BUFFER] = state;
-            this.update_pred++;
+            g_preds[this.buffer][(this.frame + NUM_PREDICTIONS) % NUM_BUFFER] = state;
         }
     }
 
     ProjectileState GetState(int frame)
     {
-        int update = this.FrameToUpdate(frame);
-        if (update < this.update - NUM_PREDICTIONS)
-            update = this.update - NUM_PREDICTIONS;
+        ProjectileState state;
+        state = g_preds[this.buffer][frame % NUM_BUFFER];
+        if (state.frame != frame)
+            state = g_preds[this.buffer][g_tickcount_frame % NUM_BUFFER];
 
-        return g_preds[this.buffer][(update + NUM_BUFFER) % NUM_BUFFER];
+        return state;
     }
 
     ProjectileState PredictForward(ProjectileState current)
@@ -1284,7 +1277,7 @@ enum struct Projectile
             OffsetVector(current.pos, current.vel, g_globals.interval_per_tick, state.pos);
             OffsetVector(current.rot, current.angvel, g_globals.interval_per_tick, state.rot);
 
-            state.update = current.update + 1;
+            state.frame = current.frame + 1;
         }
 
         return state;
@@ -1301,7 +1294,7 @@ enum struct Projectile
             OffsetVector(current.pos, current.vel, -g_globals.interval_per_tick, state.pos);
             OffsetVector(current.rot, current.angvel, -g_globals.interval_per_tick, state.rot);
 
-            state.update = current.update - 1;
+            state.frame = current.frame - 1;
         }
 
         return state;
@@ -1860,7 +1853,7 @@ public void OnPluginStart()
     g_settings[SETTING_FAKEDELAY].f_stop = Fakedelay_Stop;
     g_settings[SETTING_FAKEDELAY].f_active = SettingActiveDefaultIntGE;
     g_settings[SETTING_FAKEDELAY].range[0] = -1.0;
-    g_settings[SETTING_FAKEDELAY].range[1] = 1000.0;
+    g_settings[SETTING_FAKEDELAY].range[1] = NUM_PREDICTIONS*g_globals.interval_per_tick*1000.0;
     g_settings[SETTING_FAKEDELAY].Init(-1.0, false);
 
     // Config
@@ -3426,7 +3419,7 @@ MRESReturn Sync_Detour_Post_CGameServer__SendClientMessages(Address pThis, DHook
             if (!g_projs[client][i].IsMoveTypeSupported())
                 continue;
 
-            int frame = g_projs[client][i].frame_base + g_projs[client][i].update;
+            int frame = g_projs[client][i].frame;
             g_projs[client][i].GetState(frame).WriteTo(g_projs[client][i].entity);
         }
     }
