@@ -531,12 +531,12 @@ enum struct Detour
         bool fail = false;
 
         if (pre != INVALID_FUNCTION && !DHookEnableDetour(this.detour, false, pre)) {
-            PrintToServer("JumpQoL - Failed to detour %s (pre).", this.name);
+            Format(g_error, sizeof(g_error), "Failed to detour %s (pre).", this.name);
             fail = true;
         }
 
         if (post != INVALID_FUNCTION && !DHookEnableDetour(this.detour, true, post)) {
-            PrintToServer("JumpQoL - Failed to detour %s (post).", this.name);
+            Format(g_error, sizeof(g_error), "Failed to detour %s (post).", this.name);
             fail = true;
         }
 
@@ -700,7 +700,7 @@ enum struct Setting
         this.working = success;
 
         if (!success) {
-            PrintToServer("JumpQoL - Unable to setup setting %s: %s", this.name, g_error);
+            LogMessage("Unable to setup setting %s: %s", this.name, g_error);
             return false;
         }
 
@@ -898,7 +898,7 @@ enum struct Setting
 
             this.working = false;
 
-            PrintToServer("JumpQoL - Unable to start setting %s: %s", this.name, g_error);
+            LogMessage("Unable to start setting %s: %s", this.name, g_error);
 
             SetError("This setting is unavailable.");
             return SETTING_ERROR;
