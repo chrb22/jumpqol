@@ -1999,7 +1999,7 @@ void ConVarChanged_Setting_Default(ConVar convar, const char[] old_value, const 
         return;
     }
 
-    if (g_settings[index].convar_enforce.BoolValue)
+    if (g_settings[index].IsEnforced())
         ForceDefault(g_settings[index]);
 }
 
@@ -2024,7 +2024,7 @@ void ConVarChanged_Setting_Enforce(ConVar convar, const char[] old_value, const 
         return;
     }
 
-    if (g_settings[index].convar_enforce.BoolValue)
+    if (g_settings[index].IsEnforced())
         ForceDefault(g_settings[index]);
 }
 
@@ -2035,7 +2035,7 @@ void SetValueFromCommand(int client, Setting setting, const char[] value_string)
         return;
     }
 
-    if (setting.convar_enforce.BoolValue) {
+    if (setting.IsEnforced()) {
         ReplyToCommand(client, "Server doesn't allow \"%s\" to be changed.", setting.name);
         return;
     }
@@ -2063,7 +2063,7 @@ Action Command_Plugin(int client, int args)
 
         ReplySource source = GetCmdReplySource();
         for (int setting = 0; setting < NUM_SETTINGS; setting++)
-            if (g_settings[setting].working && (!g_settings[setting].convar_enforce.BoolValue || source == SM_REPLY_TO_CONSOLE)) {
+            if (g_settings[setting].working && (!g_settings[setting].IsEnforced() || source == SM_REPLY_TO_CONSOLE)) {
                 char setting_value_string[64];
                 GetSettingValueString(g_settings[setting], client, setting_value_string, 64);
 
