@@ -1131,7 +1131,7 @@ ArrayList g_pred_indices;
 
 enum struct Projectile
 {
-    int entity;
+    int ref;
 
     MoveType movetype;
 
@@ -1140,14 +1140,21 @@ enum struct Projectile
     int frame;
     int buffer;
 
+    int Entity()
+    {
+        return EntRefToEntIndex(this.ref);
+    }
+
     bool IsMoveTypeSupported()
     {
         return this.movetype == MOVETYPE_FLY;
     }
 
-    void Init(int entity)
+    void Init(int ref)
     {
-        this.entity = entity;
+        int entity = EntRefToEntIndex(ref);
+
+        this.ref = ref;
         this.movetype = view_as<MoveType>(GetEntProp(entity, Prop_Data, "m_MoveType"));
 
         int total = 0;
@@ -1168,7 +1175,7 @@ enum struct Projectile
         int i = 0;
         int count = 0;
         while (count < total) {
-            SendProp prop = GetSendProp(this.entity, i);
+            SendProp prop = GetSendProp(entity, i);
             
             bool match = true;
             if (prop.offset == FindDataMapInfo(0, "m_vecOrigin"))
@@ -1218,7 +1225,7 @@ enum struct Projectile
     void StoreCurrentState()
     {
         ProjectileState state_current;
-        state_current.ReadFrom(this.entity);
+        state_current.ReadFrom(this.Entity());
         state_current.frame = this.frame;
 
         ProjectileState state_predicted;
@@ -1303,19 +1310,45 @@ enum struct Projectile
 Projectile g_projs[MAXPLAYERS+1][MAX_PROJECTILES];
 int g_numprojs[MAXPLAYERS+1];
 
-#define MAX_EDICTS (1<<11)
-enum struct ProjetileFind
-{
-    int client;
-    int index;
-}
-ProjetileFind g_findprojs[MAX_EDICTS];
-
 int g_delprojs[MAXPLAYERS+1][MAX_PROJECTILES];
 int g_numdelprojs[MAXPLAYERS+1];
 
 int g_newprojs[MAXPLAYERS+1][MAX_PROJECTILES];
 int g_numnewprojs[MAXPLAYERS+1];
+
+enum struct ProjectileInfo
+{
+    int ref;
+    int client;
+    int index;
+}
+
+#define MAX_EDICTS (1<<11)
+int g_findclients[MAX_EDICTS] = {-1, ...};
+ProjectileInfo FindProjectile(int entity)
+{
+    ProjectileInfo info = {-1, -1, -1};
+
+    int ref = EntIndexToEntRef(entity);
+    if (ref == -1)
+        return info;
+
+    int client = g_findclients[entity];
+    if ( !(1 <= client <= MaxClients) )
+        return info;
+
+    int numprojs = g_numprojs[client];
+    for (int index = 0; index < numprojs; index++) {
+        if (ref == g_projs[client][index].ref) {
+            info.ref = ref;
+            info.client = client;
+            info.index = index;
+            return info;
+        }
+    }
+
+    return info;
+}
 
 
 
@@ -1448,64 +1481,59 @@ methodmap Session
 
     public void ClearProjectiles()
     {
-        for (int i = 0; i < g_numprojs[this.client]; i++) {
+        for (int i = 0; i < g_numprojs[this.client]; i++)
             g_projs[this.client][i].Deactivate();
-
-            int entity = g_projs[this.client][i].entity;
-            g_findprojs[entity].client = -1;
-            g_findprojs[entity].index = -1;
-        }
 
         g_numprojs[this.client] = 0;
         g_numnewprojs[this.client] = 0;
     }
 
-    public int FindProjectile(int entity)
+    public int FindProjectile(int ref)
     {
-        return g_findprojs[entity].client == this.client ? g_findprojs[entity].index : -1;
+        int client = this.client;
+        for (int index = 0; index < g_numprojs[client]; index++)
+            if (g_projs[client][index].ref == ref)
+                return index;
+
+        return -1;
     }
 
-    public bool HasProjectile(int entity)
+    public bool HasProjectile(int ref)
     {
-        return this.FindProjectile(entity) != -1;
+        return this.FindProjectile(ref) != -1;
     }
 
-    public bool AddProjectile(int entity)
+    public bool AddProjectile(int ref)
     {
-        if (g_numprojs[this.client] == MAX_PROJECTILES || this.HasProjectile(entity))
+        int client = this.client;
+
+        if (g_numprojs[client] == MAX_PROJECTILES || this.HasProjectile(ref))
             return false;
 
-        int index = g_numprojs[this.client];
+        int index = g_numprojs[client];
 
-        g_findprojs[entity].client = this.client;
-        g_findprojs[entity].index = index;
+        g_numprojs[client]++;
 
-        g_numprojs[this.client]++;
-
-        g_projs[this.client][index].Init(entity);
-        g_projs[this.client][index].Activate();
+        g_projs[client][index].Init(ref);
+        g_projs[client][index].Activate();
 
         return true;
     }
 
-    public bool RemoveProjectile(int entity)
+    public bool RemoveProjectile(int ref)
     {
-        int index = this.FindProjectile(entity);
+        int client = this.client;
 
+        int index = this.FindProjectile(ref);
         if (index == -1)
             return false;
 
-        g_projs[this.client][index].Deactivate();
+        g_projs[client][index].Deactivate();
 
-        g_findprojs[entity].client = -1;
-        g_findprojs[entity].index = -1;
+        for (int i = index; i < g_numprojs[client] - 1; i++)
+            g_projs[client][i] = g_projs[client][i + 1];
 
-        for (int i = index; i < g_numprojs[this.client] - 1; i++) {
-            g_projs[this.client][i] = g_projs[this.client][i + 1];
-            g_findprojs[g_projs[this.client][i].entity].index--;
-        }
-
-        g_numprojs[this.client]--;
+        g_numprojs[client]--;
 
         return true;
     }
@@ -1867,11 +1895,6 @@ public void OnPluginStart()
         g_sessions[client].Init();
     }
 
-    for (int entity = 0; entity < MAX_EDICTS; entity++) {
-        g_findprojs[entity].client = -1;
-        g_findprojs[entity].index = -1;
-    }
-
     g_pred_indices = new ArrayList(1, MAXPLAYERS*MAX_PROJECTILES);
     for (int index = 0; index < MAXPLAYERS*MAX_PROJECTILES; index++)
         g_pred_indices.Set(index, index);
@@ -2202,6 +2225,9 @@ public void OnEntityCreated(int entity, const char[] classname)
 
 void OnProjectileSpawnPost(int entity)
 {
+    if (!IsValidEdict(entity))
+        return;
+
     int owner = GetEntPropEnt(entity, Prop_Data, "m_hOwnerEntity");
     if (owner != -1 && HasEntProp(owner, Prop_Send, "m_hBuilder"))
         owner = GetEntPropEnt(owner, Prop_Send, "m_hBuilder");
@@ -2209,18 +2235,22 @@ void OnProjectileSpawnPost(int entity)
     if (!IsActivePlayer(owner))
         return;
 
-    if (g_numnewprojs[owner] < MAX_PROJECTILES)
-        g_newprojs[owner][g_numnewprojs[owner]++] = entity;
+    if (g_numnewprojs[owner] < MAX_PROJECTILES) {
+        g_findclients[entity] = owner;
+        g_newprojs[owner][g_numnewprojs[owner]++] = EntIndexToEntRef(entity);
+    }
 }
 
 public void OnEntityDestroyed(int entity)
 {
-    if (!IsValidEdict(entity))
+    if (entity < 0)
         return;
 
-    int client = g_findprojs[entity].client;
-    if (client != -1)
-        g_delprojs[client][g_numdelprojs[client]++] = entity;
+    ProjectileInfo proj; proj = FindProjectile(entity);
+    if (IsActivePlayer(proj.client))
+        g_delprojs[proj.client][g_numdelprojs[proj.client]++] = proj.ref;
+
+    g_findclients[entity] = -1;
 }
 
 
@@ -2250,16 +2280,14 @@ MRESReturn Required_Detour_Post_Physics_SimulateEntity(DHookParam hParams)
     if (IsActivePlayer(entity))
         g_player_simulating = -1;
 
-    int client = g_findprojs[entity].client;
-    if (!IsActivePlayer(client))
+    ProjectileInfo proj; proj = FindProjectile(entity);
+    if (!IsActivePlayer(proj.client))
         return MRES_Ignored;
 
     // Can't think of a good way to tell it there was no update because of sync (maybe run this in a CBaseEntity::PhysicsSimulate detour instead?)
-    bool sync = g_sessions[client].sync;
-    if (!sync || sync && g_allow_update) {
-        int index = g_findprojs[entity].index;
-        g_projs[client][index].Update();
-    }
+    bool sync = g_sessions[proj.client].sync;
+    if (!sync || sync && g_allow_update)
+        g_projs[proj.client][proj.index].Update();
 
     return MRES_Ignored;
 }
@@ -2520,7 +2548,7 @@ MRESReturn Projdecals_Detour_Pre_UTIL_DecalTrace(DHookParam hParams)
     if (g_weapon_simulating != -1)
         client = g_player_simulating;
     else if (g_entity_simulating != -1)
-        client = g_findprojs[g_entity_simulating].client;
+        client = FindProjectile(g_entity_simulating).client;
 
     if (!IsActivePlayer(client))
         return MRES_Ignored;
@@ -3319,8 +3347,9 @@ void Sync_OnPlayerRunCmdPost(int client)
     g_allow_update = true;
 
     for (int i = 0; i < g_numprojs[client]; i++) {
-        if (!IsValidEdict(g_projs[client][i].entity))
-                continue;
+        int entity = g_projs[client][i].Entity();
+        if (entity == -1)
+            continue;
 
         if (!g_projs[client][i].IsMoveTypeSupported())
             continue;
@@ -3329,8 +3358,6 @@ void Sync_OnPlayerRunCmdPost(int client)
         g_globals.frametime = g_frametime_frame;
         g_globals.tickcount = g_tickcount_frame;
 
-        int entity = g_projs[client][i].entity;
-
         int m_nSimulationTick_offset = FindDataMapInfo(0, "m_spawnflags") - 4; // m_nSimulationTick is right before m_spawnflags
 
         int m_nSimulationTick = GetEntData(entity, m_nSimulationTick_offset);
@@ -3338,7 +3365,8 @@ void Sync_OnPlayerRunCmdPost(int client)
 
         SDKCall(g_Call_Physics_SimulateEntity, entity);
 
-        SetEntData(entity, m_nSimulationTick_offset, m_nSimulationTick + 1);
+        if (IsValidEdict(entity))
+            SetEntData(entity, m_nSimulationTick_offset, m_nSimulationTick + 1);
     }
 
     g_allow_update = false;
@@ -3360,17 +3388,15 @@ MRESReturn Sync_Detour_Pre_Physics_SimulateEntity(DHookParam hParams)
     if (!IsValidEdict(entity))
         return MRES_Ignored;
 
-    int client = g_findprojs[entity].client;
+    ProjectileInfo proj; proj = FindProjectile(entity);
 
-    if (!IsActivePlayer(client))
+    if (!IsActivePlayer(proj.client))
         return MRES_Ignored;
 
-    if (!g_sessions[client].sync)
+    if (!g_sessions[proj.client].sync)
         return MRES_Ignored;
 
-    int index = g_findprojs[entity].index;
-
-    if (!g_projs[client][index].IsMoveTypeSupported())
+    if (!g_projs[proj.client][proj.index].IsMoveTypeSupported())
         return MRES_Ignored;
 
     if (!g_allow_update)
@@ -3389,14 +3415,15 @@ MRESReturn Sync_Detour_Pre_CGameServer__SendClientMessages(Address pThis, DHookP
             continue;
 
         for (int i = 0; i < g_numprojs[client]; i++) {
-            if (!IsValidEdict(g_projs[client][i].entity))
+            int entity = g_projs[client][i].Entity();
+            if (entity == -1)
                 continue;
 
             if (!g_projs[client][i].IsMoveTypeSupported())
                 continue;
 
-            SetEntPropFloat(g_projs[client][i].entity, Prop_Data, "m_flSimulationTime", g_curtime_frame); // Marks entity as updated for the current frame
-            g_projs[client][i].GetState(g_tickcount_frame).WriteTo(g_projs[client][i].entity);
+            SetEntPropFloat(entity, Prop_Data, "m_flSimulationTime", g_curtime_frame); // Marks entity as updated for the current frame
+            g_projs[client][i].GetState(g_tickcount_frame).WriteTo(entity);
         }
     }
 
@@ -3413,14 +3440,15 @@ MRESReturn Sync_Detour_Post_CGameServer__SendClientMessages(Address pThis, DHook
             continue;
 
         for (int i = 0; i < g_numprojs[client]; i++) {
-            if (!IsValidEdict(g_projs[client][i].entity))
+            int entity = g_projs[client][i].Entity();
+            if (entity == -1)
                 continue;
 
             if (!g_projs[client][i].IsMoveTypeSupported())
                 continue;
 
             int frame = g_projs[client][i].frame;
-            g_projs[client][i].GetState(frame).WriteTo(g_projs[client][i].entity);
+            g_projs[client][i].GetState(frame).WriteTo(entity);
         }
     }
 
@@ -3435,11 +3463,11 @@ MRESReturn Sync_Detour_Pre_UTIL_DecalTrace(DHookParam hParams)
     if (g_entity_simulating == -1)
         return MRES_Ignored;
 
-    int client = g_findprojs[g_entity_simulating].client;
-    if (!IsActivePlayer(client))
+    ProjectileInfo proj; proj = FindProjectile(g_entity_simulating);
+    if (!IsActivePlayer(proj.client))
         return MRES_Ignored;
 
-    if (!g_sessions[client].sync)
+    if (!g_sessions[proj.client].sync)
         return MRES_Ignored;
 
     g_sync_te.m_pSuppressHost = Address_Null;
@@ -3751,7 +3779,7 @@ enum struct bf_read
 Handle g_Call_SkipProp[7];
 void FindProjectileBitOffsets(int client, int index)
 {
-    int entity = g_projs[client][index].entity;
+    int entity = g_projs[client][index].Entity();
     BitBuffer buffer = g_framesnapshotmanager.packeddata.Get(entity).data;
     int numbits = g_framesnapshotmanager.packeddata.Get(entity).numbits;
 
@@ -3889,7 +3917,8 @@ MRESReturn Fakedelay_Detour_Pre_SV_ComputeClientPacks(Address pThis, DHookParam 
             continue;
 
         for (int i = 0; i < g_numprojs[client]; i++) {
-            if (!IsValidEdict(g_projs[client][i].entity))
+            int entity = g_projs[client][i].Entity();
+            if (entity == -1)
                 continue;
 
             if (!g_projs[client][i].IsMoveTypeSupported())
@@ -3899,8 +3928,6 @@ MRESReturn Fakedelay_Detour_Pre_SV_ComputeClientPacks(Address pThis, DHookParam 
             g_projs[client][i].message.rot.bit = -1;
             g_projs[client][i].message.vel.bit = -1;
             g_projs[client][i].message.angvel.bit = -1;
-
-            int entity = g_projs[client][i].entity;
 
             SendProp prop;
 
@@ -3944,13 +3971,12 @@ MRESReturn Fakedelay_Detour_Post_SV_ComputeClientPacks(Address pThis, DHookParam
             continue;
 
         for (int i = 0; i < g_numprojs[client]; i++) {
-            if (!IsValidEdict(g_projs[client][i].entity))
+            int entity = g_projs[client][i].Entity();
+            if (entity == -1)
                 continue;
 
             if (!g_projs[client][i].IsMoveTypeSupported())
                 continue;
-
-            int entity = g_projs[client][i].entity;
 
             SendProp prop;
 
@@ -3972,7 +3998,7 @@ MRESReturn Fakedelay_Detour_Post_SV_ComputeClientPacks(Address pThis, DHookParam
 
             FindProjectileBitOffsets(client, i);
 
-            BitBuffer buffer = g_framesnapshotmanager.packeddata.Get(g_projs[client][i].entity).data;
+            BitBuffer buffer = g_framesnapshotmanager.packeddata.Get(entity).data;
 
             SendPropInfo propinfo;
 
@@ -4014,13 +4040,14 @@ MRESReturn Fakedelay_Detour_Pre_CGameClient__SendSnapshot(Address pThis, DHookPa
     int frame = g_tickcount_frame + GetDelay(client) - RoundToCeil(g_sessions[client].fakedelay / 1000.0 / g_globals.interval_per_tick);
 
     for (int i = 0; i < g_numprojs[client]; i++) {
-        if (!IsValidEdict(g_projs[client][i].entity))
+        int entity = g_projs[client][i].Entity();
+        if (entity == -1)
             continue;
 
         if (!g_projs[client][i].IsMoveTypeSupported())
             continue;
 
-        BitBuffer buffer = g_framesnapshotmanager.packeddata.Get(g_projs[client][i].entity).data;
+        BitBuffer buffer = g_framesnapshotmanager.packeddata.Get(entity).data;
 
         SendPropInfo propinfo;
 
@@ -4077,13 +4104,14 @@ MRESReturn Fakedelay_Detour_Post_CGameClient__SendSnapshot(Address pThis, DHookP
         return MRES_Ignored;
 
     for (int i = 0; i < g_numprojs[client]; i++) {
-        if (!IsValidEdict(g_projs[client][i].entity))
+        int entity = g_projs[client][i].Entity();
+        if (entity == -1)
             continue;
         
         if (!g_projs[client][i].IsMoveTypeSupported())
             continue;
 
-        BitBuffer buffer = g_framesnapshotmanager.packeddata.Get(g_projs[client][i].entity).data;
+        BitBuffer buffer = g_framesnapshotmanager.packeddata.Get(entity).data;
 
         SendPropInfo prop;
 
