@@ -1,7 +1,6 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#include <sdkhooks>
 #include <dhooks>
 
 public Plugin myinfo =
@@ -2209,6 +2208,7 @@ public void OnGameFrame()
 
 
 
+int g_created = -1;
 public void OnEntityCreated(int entity, const char[] classname)
 {
     // if (strncmp(classname, "tf_projectile_", 14) != 0)
@@ -2220,25 +2220,7 @@ public void OnEntityCreated(int entity, const char[] classname)
     )
         return;
 
-    SDKHook(entity, SDKHook_SpawnPost, OnProjectileSpawnPost);
-}
-
-void OnProjectileSpawnPost(int entity)
-{
-    if (!IsValidEdict(entity))
-        return;
-
-    int owner = GetEntPropEnt(entity, Prop_Data, "m_hOwnerEntity");
-    if (owner != -1 && HasEntProp(owner, Prop_Send, "m_hBuilder"))
-        owner = GetEntPropEnt(owner, Prop_Send, "m_hBuilder");
-
-    if (!IsActivePlayer(owner))
-        return;
-
-    if (g_numnewprojs[owner] < MAX_PROJECTILES) {
-        g_findclients[entity] = owner;
-        g_newprojs[owner][g_numnewprojs[owner]++] = EntIndexToEntRef(entity);
-    }
+    g_created = entity;
 }
 
 public void OnEntityDestroyed(int entity)
@@ -2332,13 +2314,32 @@ public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float
 MRESReturn Required_Detour_Pre_CTFWeaponBase__ItemPostFrame(int entity)
 {
     g_weapon_simulating = entity;
+    g_created = -1;
 
     return MRES_Handled;
 }
 
 MRESReturn Required_Detour_Post_CTFWeaponBase__ItemPostFrame(int entity)
 {
+    int created = g_created;
+
     g_weapon_simulating = -1;
+    g_created = -1;
+
+    if (!IsValidEdict(created))
+        return MRES_Ignored;
+
+    int owner = GetEntPropEnt(created, Prop_Data, "m_hOwnerEntity");
+    if (owner != -1 && HasEntProp(owner, Prop_Send, "m_hBuilder"))
+        owner = GetEntPropEnt(owner, Prop_Send, "m_hBuilder");
+
+    if (!IsActivePlayer(owner))
+        return MRES_Ignored;
+
+    if (g_numnewprojs[owner] < MAX_PROJECTILES) {
+        g_findclients[created] = owner;
+        g_newprojs[owner][g_numnewprojs[owner]++] = EntIndexToEntRef(created);
+    }
 
     return MRES_Ignored;
 }
