@@ -3342,8 +3342,6 @@ void Sync_OnPlayerRunCmdPost(int client)
     float frametime_player = g_globals.frametime;
     int tickcount_player = g_globals.tickcount;
 
-    Address m_pHostPlayer = LoadFromAddress(g_sync_movehelper + view_as<Address>(4), NumberType_Int32);
-
     g_allow_update = true;
 
     for (int i = 0; i < g_numprojs[client]; i++) {
@@ -3373,9 +3371,10 @@ void Sync_OnPlayerRunCmdPost(int client)
 
     // Set simulating entity back to the client
     g_entity_simulating = client;
+    g_player_simulating = client;
 
     // If one of the player's projectiles has another player as their move parent, then m_pHostPlayer gets set to null after simulating the other player
-    StoreToAddress(g_sync_movehelper + view_as<Address>(4), m_pHostPlayer, NumberType_Int32);
+    StoreToAddress(g_sync_movehelper + view_as<Address>(8), GetEntityAddress(client), NumberType_Int32);
 
     g_globals.curtime = curtime_player;
     g_globals.frametime = frametime_player;
