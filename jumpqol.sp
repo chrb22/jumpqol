@@ -2116,8 +2116,13 @@ Action Command_Plugin(int client, int args)
 
         ReplyToCommand(client, setting_value_string);
         ReplyToCommand(client, g_settings[index].desc);
+
+        if (client != 0 && strcmp(g_settings[index].name, "fakedelay") == 0)
+            ReplyToCommand(client, "Real delay is currently %d ms. Use this value to fake this server's delay on any server.", RoundToNearest(GetDelay(client)*g_globals.interval_per_tick*1000.0));
+
         if (strcmp(g_settings[index].expl, "") != 0)
             ReplyToCommand(client, g_settings[index].expl);
+
         return Plugin_Handled;
     }
 
@@ -2146,6 +2151,10 @@ Action Command_Setting(int client, int args)
 
         ReplyToCommand(client, setting_value_string);
         ReplyToCommand(client, g_settings[index].desc);
+
+        if (client != 0 && strcmp(g_settings[index].name, "fakedelay") == 0)
+            ReplyToCommand(client, "Real delay is currently %d ms. Use this value to fake this server's delay on any server.", RoundToNearest(GetDelay(client)*g_globals.interval_per_tick*1000.0));
+
         if (strcmp(g_settings[index].expl, "") != 0)
             ReplyToCommand(client, g_settings[index].expl);
 
