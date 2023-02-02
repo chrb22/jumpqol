@@ -516,7 +516,10 @@ enum struct Detour
         strcopy(this.name, sizeof(this.name), name);
 
         this.detour = DHookCreateDetour(Address_Null, callconv, returntype, thistype);
-        DHookSetFromConf(this.detour, g_gameconf, SDKConf_Signature, this.name);
+        if (!DHookSetFromConf(this.detour, g_gameconf, SDKConf_Signature, this.name)) {
+            this.detour = INVALID_HANDLE;
+            return;
+        }
 
         int i = 0;
         while (params[i] != HookParamType_Unknown) {
@@ -527,15 +530,20 @@ enum struct Detour
 
     bool Enable(DHookCallback pre = INVALID_FUNCTION, DHookCallback post = INVALID_FUNCTION)
     {
+        if (this.detour == INVALID_HANDLE) {
+            Format(g_error, sizeof(g_error), "Failed to initialize detour %s.", this.name);
+            return false;
+        }
+
         bool fail = false;
 
         if (pre != INVALID_FUNCTION && !DHookEnableDetour(this.detour, false, pre)) {
-            Format(g_error, sizeof(g_error), "Failed to detour %s (pre).", this.name);
+            Format(g_error, sizeof(g_error), "Failed to enable detour %s (pre).", this.name);
             fail = true;
         }
 
         if (post != INVALID_FUNCTION && !DHookEnableDetour(this.detour, true, post)) {
-            Format(g_error, sizeof(g_error), "Failed to detour %s (post).", this.name);
+            Format(g_error, sizeof(g_error), "Failed to enable detour %s (post).", this.name);
             fail = true;
         }
 
@@ -1694,7 +1702,7 @@ public void OnPluginStart()
 {
     g_gameconf = LoadGameConfigFile("jumpqol");
     if (!g_gameconf)
-        SetFailState("JumpQoL - Unable to start plugin: Failed to load gameconf jumpqol.txt.");
+        SetFailState("[jumpqol.smx] Unable to start plugin: Failed to load gameconf jumpqol.txt.");
 
     // Detours
     g_detours[DETOUR_PHYSICS_SIMULATEENTITY].Init(
@@ -1750,7 +1758,7 @@ public void OnPluginStart()
 
     // Required
     if (!Required_Init())
-        SetFailState("JumpQoL - Unable to start plugin: %s", g_error);
+        SetFailState("[jumpqol.smx] Unable to start plugin: %s", g_error);
 
     // Settings
     RegConsoleCmd("sm_jumpqol", Command_Plugin);
@@ -2118,7 +2126,7 @@ Action Command_Plugin(int client, int args)
         ReplyToCommand(client, g_settings[index].desc);
 
         if (client != 0 && strcmp(g_settings[index].name, "fakedelay") == 0)
-            ReplyToCommand(client, "Real delay is currently %d ms. Use this value to fake this server's delay on any server.", RoundToNearest(GetDelay(client)*g_globals.interval_per_tick*1000.0));
+            ReplyToCommand(client, "Real delay is currently %d ms. Use this value to fake this server's delay on other servers.", RoundToNearest(GetDelay(client)*g_globals.interval_per_tick*1000.0));
 
         if (strcmp(g_settings[index].expl, "") != 0)
             ReplyToCommand(client, g_settings[index].expl);
@@ -2153,7 +2161,7 @@ Action Command_Setting(int client, int args)
         ReplyToCommand(client, g_settings[index].desc);
 
         if (client != 0 && strcmp(g_settings[index].name, "fakedelay") == 0)
-            ReplyToCommand(client, "Real delay is currently %d ms. Use this value to fake this server's delay on any server.", RoundToNearest(GetDelay(client)*g_globals.interval_per_tick*1000.0));
+            ReplyToCommand(client, "Real delay is currently %d ms. Use this value to fake this server's delay on other servers.", RoundToNearest(GetDelay(client)*g_globals.interval_per_tick*1000.0));
 
         if (strcmp(g_settings[index].expl, "") != 0)
             ReplyToCommand(client, g_settings[index].expl);
