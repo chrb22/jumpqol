@@ -1748,7 +1748,7 @@ public void OnPluginStart()
     g_detours[DETOUR_SV_COMPUTECLIENTPACKS].Init(
         "SV_ComputeClientPacks",
         CallConv_CDECL, ReturnType_Void, ThisPointer_Ignore,
-        {HookParamType_Bool, HookParamType_Unknown}
+        {HookParamType_Int, HookParamType_Int, HookParamType_ObjectPtr, HookParamType_Unknown}
     );
     g_detours[DETOUR_SENDSNAPSHOT].Init(
         "CGameClient::SendSnapshot",
