@@ -1747,7 +1747,7 @@ public void OnPluginStart()
     );
     g_detours[DETOUR_SV_COMPUTECLIENTPACKS].Init(
         "SV_ComputeClientPacks",
-        CallConv_THISCALL, ReturnType_Void, ThisPointer_Address,
+        CallConv_CDECL, ReturnType_Void, ThisPointer_Ignore,
         {HookParamType_Bool, HookParamType_Unknown}
     );
     g_detours[DETOUR_SENDSNAPSHOT].Init(
@@ -3924,7 +3924,7 @@ float g_fillpos[MAXPLAYERS+1][MAX_PROJECTILES][3];
 float g_fillrot[MAXPLAYERS+1][MAX_PROJECTILES][3];
 float g_fillvel[MAXPLAYERS+1][MAX_PROJECTILES][3];
 float g_fillangvel[MAXPLAYERS+1][MAX_PROJECTILES][3];
-MRESReturn Fakedelay_Detour_Pre_SV_ComputeClientPacks(Address pThis, DHookParam hParams)
+MRESReturn Fakedelay_Detour_Pre_SV_ComputeClientPacks(DHookParam hParams)
 {
     for (int client = 1; client <= MaxClients; client++) {
         if (!IsActivePlayer(client))
@@ -3978,7 +3978,7 @@ MRESReturn Fakedelay_Detour_Pre_SV_ComputeClientPacks(Address pThis, DHookParam 
     return MRES_Ignored;
 }
 
-MRESReturn Fakedelay_Detour_Post_SV_ComputeClientPacks(Address pThis, DHookParam hParams)
+MRESReturn Fakedelay_Detour_Post_SV_ComputeClientPacks(DHookParam hParams)
 {
     for (int client = 1; client <= MaxClients; client++) {
         if (!IsActivePlayer(client))
