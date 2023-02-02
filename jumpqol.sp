@@ -2125,10 +2125,10 @@ Action Command_Plugin(int client, int args)
         ReplyToCommand(client, setting_value_string);
         ReplyToCommand(client, g_settings[index].desc);
 
-        if (client != 0 && strcmp(g_settings[index].name, "fakedelay") == 0)
+        if (client != 0 && StrEqual(g_settings[index].name, "fakedelay"))
             ReplyToCommand(client, "Real delay is currently %d ms. Use this value to fake this server's delay on other servers.", RoundToNearest(GetDelay(client)*g_globals.interval_per_tick*1000.0));
 
-        if (strcmp(g_settings[index].expl, "") != 0)
+        if (!StrEqual(g_settings[index].expl, ""))
             ReplyToCommand(client, g_settings[index].expl);
 
         return Plugin_Handled;
@@ -2160,10 +2160,10 @@ Action Command_Setting(int client, int args)
         ReplyToCommand(client, setting_value_string);
         ReplyToCommand(client, g_settings[index].desc);
 
-        if (client != 0 && strcmp(g_settings[index].name, "fakedelay") == 0)
+        if (client != 0 && StrEqual(g_settings[index].name, "fakedelay"))
             ReplyToCommand(client, "Real delay is currently %d ms. Use this value to fake this server's delay on other servers.", RoundToNearest(GetDelay(client)*g_globals.interval_per_tick*1000.0));
 
-        if (strcmp(g_settings[index].expl, "") != 0)
+        if (!StrEqual(g_settings[index].expl, ""))
             ReplyToCommand(client, g_settings[index].expl);
 
         return Plugin_Handled;
@@ -2231,9 +2231,9 @@ public void OnEntityCreated(int entity, const char[] classname)
     // if (strncmp(classname, "tf_projectile_", 14) != 0)
     //     return;
 
-    if (   strcmp(classname, "tf_projectile_rocket") != 0
-        && strcmp(classname, "tf_projectile_energy_ball") != 0
-        && strcmp(classname, "tf_projectile_sentryrocket") != 0
+    if (   !StrEqual(classname, "tf_projectile_rocket")
+        && !StrEqual(classname, "tf_projectile_energy_ball")
+        && !StrEqual(classname, "tf_projectile_sentryrocket")
     )
         return;
 
