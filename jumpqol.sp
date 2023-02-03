@@ -338,6 +338,7 @@ static const float NaNVector[3] =               {NaN, NaN, NaN};
 bool FloatIsNaN(float f) { return f != f; }
 // float FloatMin(float f1, float f2) { return (f1 < f2) ? f1 : f2; }
 float FloatMax(float f1, float f2) { return (f1 > f2) ? f1 : f2; }
+float FloatClamp(float f, float min, float max) { return f < min ? min : (f > max ? max : f); }
 
 bool VectorIsNaN(const float vec[3])
 {
@@ -1373,36 +1374,59 @@ _session
 
 
 
-
-int g_cmdrate[MAXPLAYERS+1];
-
-void RequestCmdrate(int client)
+enum struct ClientSettings
 {
-    QueryClientConVar(client, "cl_cmdrate", CallbackCmdrate);
+    float cmdrate;
+    float updaterate;
+    float interp_ratio;
+    float interp;
+}
+ClientSettings g_clientsettings[MAXPLAYERS+1];
+
+void CallbackClientSetting(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
+{
+    float value = StringToFloat(cvarValue);
+
+    if (StrEqual(cvarName, "cl_cmdrate")) {
+        float min = FindConVar("sv_mincmdrate").FloatValue;
+        float max = FindConVar("sv_maxcmdrate").FloatValue;
+        g_clientsettings[client].cmdrate = FloatClamp(value, min, max);
+    }
+    else if (StrEqual(cvarName, "cl_updaterate")) {
+        float min = FindConVar("sv_minupdaterate").FloatValue;
+        float max = FindConVar("sv_maxupdaterate").FloatValue;
+        g_clientsettings[client].updaterate = FloatClamp(value, min, max);
+    }
+    else if (StrEqual(cvarName, "cl_interp_ratio")) {
+        float min = FindConVar("sv_client_min_interp_ratio").FloatValue;
+        float max = FindConVar("sv_client_max_interp_ratio").FloatValue;
+        g_clientsettings[client].interp_ratio = FloatClamp(value, min, max);
+    }
+    else if (StrEqual(cvarName, "cl_interp")) {
+        g_clientsettings[client].interp = value;
+    }
 }
 
-void CallbackCmdrate(QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue)
+public void OnClientSettingsChanged(int client)
 {
-    int cmdrate = StringToInt(cvarValue);
+    if (!IsClientInGame(client))
+        return;
 
-    if (cmdrate < FindConVar("sv_mincmdrate").IntValue)
-        cmdrate = FindConVar("sv_mincmdrate").IntValue;
-    else if (cmdrate > FindConVar("sv_maxcmdrate").IntValue)
-        cmdrate = FindConVar("sv_maxcmdrate").IntValue;
-
-    g_cmdrate[client] = cmdrate;
+    QueryClientConVar(client, "cl_cmdrate", CallbackClientSetting);
+    QueryClientConVar(client, "cl_updaterate", CallbackClientSetting);
+    QueryClientConVar(client, "cl_interp_ratio", CallbackClientSetting);
+    QueryClientConVar(client, "cl_interp", CallbackClientSetting);
 }
 
 // Following UTIL_GetPlayerConnectionInfo
 float GetLatency(int client)
 {
-    return GetClientAvgLatency(client, NetFlow_Outgoing) - 0.5/g_cmdrate[client] - 1.0*g_globals.interval_per_tick - 0.5*g_globals.interval_per_tick;
+    return GetClientAvgLatency(client, NetFlow_Outgoing) - 0.5/g_clientsettings[client].cmdrate - 1.0*g_globals.interval_per_tick - 0.5*g_globals.interval_per_tick;
 }
 
 int GetDelay(int client)
 {
-    int m_fLerpTime_offset = GetEntSendPropOffs(client, "m_fOnTarget", true) + 40; // m_fLerpTime is 40 bytes after m_fOnTarget
-    float interp = GetEntDataFloat(client, m_fLerpTime_offset);
+    float interp = FloatMax(g_clientsettings[client].interp, g_clientsettings[client].interp_ratio / g_clientsettings[client].updaterate);
 
     // Following UTIL_GetPlayerConnectionInfo
     float latency = GetLatency(client);
@@ -1472,7 +1496,11 @@ methodmap Session
         if (IsFakeClient(this.client))
             return;
 
-        RequestCmdrate(this.client);
+        g_clientsettings[this.client].cmdrate = 66.0;
+        g_clientsettings[this.client].updaterate = 66.0;
+        g_clientsettings[this.client].interp_ratio = 1.0;
+        g_clientsettings[this.client].interp = 0.015;
+        OnClientSettingsChanged(this.client);
     }
 
     public void OnDisconnect()
