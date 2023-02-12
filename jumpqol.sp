@@ -1917,7 +1917,7 @@ public void OnPluginStart()
     g_settings[SETTING_FAKEDELAY].f_active = SettingActiveDefaultIntGE;
     g_settings[SETTING_FAKEDELAY].range[0] = -1.0;
     g_settings[SETTING_FAKEDELAY].range[1] = NUM_PREDICTIONS*g_globals.interval_per_tick*1000.0;
-    g_settings[SETTING_FAKEDELAY].Init(-1.0, false);
+    g_settings[SETTING_FAKEDELAY].Init(-1, false);
 
     // Config
     AutoExecConfig(true, "jumpqol");
