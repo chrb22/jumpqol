@@ -3979,26 +3979,26 @@ MRESReturn Fakedelay_Detour_Pre_SV_ComputeClientPacks(DHookParam hParams)
             // Force vectors with SPROP_COORD_MP_INTEGRAL flag to always be 17*3 bits long to have enough space by using a |value| >= 2^COORD_INTEGER_BITS_MP
             prop = g_projs[client][i].message.pos.prop;
             if (prop && !UseRealCoordMP(prop)) {
-                GetEntPropVector(entity, Prop_Send, "m_vecOrigin", g_fillpos[client][i]);
-                SetEntPropVector(entity, Prop_Send, "m_vecOrigin", {2048.0, 2048.0, 2048.0});
+                GetEntDataVector(entity, prop.offset, g_fillpos[client][i]);
+                SetEntDataVector(entity, prop.offset, {2048.0, 2048.0, 2048.0}, true);
             }
 
             prop = g_projs[client][i].message.rot.prop;
             if (prop && !UseRealCoordMP(prop)) {
-                GetEntPropVector(entity, Prop_Send, "m_angRotation", g_fillrot[client][i]);
-                SetEntPropVector(entity, Prop_Send, "m_angRotation", {2048.0, 2048.0, 2048.0});
+                GetEntDataVector(entity, prop.offset, g_fillrot[client][i]);
+                SetEntDataVector(entity, prop.offset, {2048.0, 2048.0, 2048.0}, true);
             }
 
             prop = g_projs[client][i].message.vel.prop;
             if (prop && !UseRealCoordMP(prop)) {
-                GetEntPropVector(entity, Prop_Send, "m_vecVelocity", g_fillvel[client][i]);
-                SetEntPropVector(entity, Prop_Send, "m_vecVelocity", {2048.0, 2048.0, 2048.0});
+                GetEntDataVector(entity, prop.offset, g_fillvel[client][i]);
+                SetEntDataVector(entity, prop.offset, {2048.0, 2048.0, 2048.0}, true);
             }
 
             prop = g_projs[client][i].message.angvel.prop;
             if (prop && !UseRealCoordMP(prop)) {
-                GetEntPropVector(entity, Prop_Send, "m_vecAngVelocity", g_fillangvel[client][i]);
-                SetEntPropVector(entity, Prop_Send, "m_vecAngVelocity", {2048.0, 2048.0, 2048.0});
+                GetEntDataVector(entity, prop.offset, g_fillangvel[client][i]);
+                SetEntDataVector(entity, prop.offset, {2048.0, 2048.0, 2048.0}, true);
             }
         }
     }
@@ -4027,19 +4027,19 @@ MRESReturn Fakedelay_Detour_Post_SV_ComputeClientPacks(DHookParam hParams)
 
             prop = g_projs[client][i].message.pos.prop;
             if (prop && !UseRealCoordMP(prop))
-                SetEntPropVector(entity, Prop_Send, "m_vecOrigin", g_fillpos[client][i]);
+                SetEntDataVector(entity, prop.offset, g_fillpos[client][i], false);
 
             prop = g_projs[client][i].message.rot.prop;
             if (prop && !UseRealCoordMP(prop))
-                SetEntPropVector(entity, Prop_Send, "m_angRotation", g_fillrot[client][i]);
+                SetEntDataVector(entity, prop.offset, g_fillrot[client][i], false);
 
             prop = g_projs[client][i].message.vel.prop;
             if (prop && !UseRealCoordMP(prop))
-                SetEntPropVector(entity, Prop_Send, "m_vecVelocity", g_fillvel[client][i]);
+                SetEntDataVector(entity, prop.offset, g_fillvel[client][i], false);
 
             prop = g_projs[client][i].message.angvel.prop;
             if (prop && !UseRealCoordMP(prop))
-                SetEntPropVector(entity, Prop_Send, "m_vecAngVelocity", g_fillangvel[client][i]);
+                SetEntDataVector(entity, prop.offset, g_fillangvel[client][i], false);
 
             FindProjectileBitOffsets(client, i);
 
@@ -4048,7 +4048,6 @@ MRESReturn Fakedelay_Detour_Post_SV_ComputeClientPacks(DHookParam hParams)
             SendPropInfo propinfo;
 
             propinfo = g_projs[client][i].message.pos;
-
             if (propinfo.bit != -1 && !UseRealCoordMP(propinfo.prop))
                 buffer.WritePropVector(propinfo, propinfo.bit, g_fillpos[client][i]);
 
