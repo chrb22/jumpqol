@@ -43,7 +43,7 @@ methodmap Globals
         }
         public set(float curtime)
         {
-            StoreToAddress(view_as<Address>(this) + view_as<Address>(12), view_as<int>(curtime), NumberType_Int32);
+            StoreToAddress(view_as<Address>(this) + view_as<Address>(12), view_as<int>(curtime), NumberType_Int32, false);
         }
     }
 
@@ -55,7 +55,7 @@ methodmap Globals
         }
         public set(float frametime)
         {
-            StoreToAddress(view_as<Address>(this) + view_as<Address>(16), view_as<int>(frametime), NumberType_Int32);
+            StoreToAddress(view_as<Address>(this) + view_as<Address>(16), view_as<int>(frametime), NumberType_Int32, false);
         }
     }
 
@@ -67,7 +67,7 @@ methodmap Globals
         }
         public set(int tickcount)
         {
-            StoreToAddress(view_as<Address>(this) + view_as<Address>(24), view_as<int>(tickcount), NumberType_Int32);
+            StoreToAddress(view_as<Address>(this) + view_as<Address>(24), view_as<int>(tickcount), NumberType_Int32, false);
         }
     }
 
@@ -99,7 +99,7 @@ methodmap Vector
         }
         public set(float x)
         {
-            StoreToAddress(view_as<Address>(this) + view_as<Address>(0), view_as<int>(x), NumberType_Int32);
+            StoreToAddress(view_as<Address>(this) + view_as<Address>(0), view_as<int>(x), NumberType_Int32, false);
         }
     }
 
@@ -111,7 +111,7 @@ methodmap Vector
         }
         public set(float y)
         {
-            StoreToAddress(view_as<Address>(this) + view_as<Address>(4), view_as<int>(y), NumberType_Int32);
+            StoreToAddress(view_as<Address>(this) + view_as<Address>(4), view_as<int>(y), NumberType_Int32, false);
         }
     }
 
@@ -123,7 +123,7 @@ methodmap Vector
         }
         public set(float z)
         {
-            StoreToAddress(view_as<Address>(this) + view_as<Address>(8), view_as<int>(z), NumberType_Int32);
+            StoreToAddress(view_as<Address>(this) + view_as<Address>(8), view_as<int>(z), NumberType_Int32, false);
         }
     }
 };
@@ -151,7 +151,7 @@ methodmap Plane
         }
         public set(float dist)
         {
-            StoreToAddress(view_as<Address>(this) + view_as<Address>(12), view_as<int>(dist), NumberType_Int32);
+            StoreToAddress(view_as<Address>(this) + view_as<Address>(12), view_as<int>(dist), NumberType_Int32, false);
         }
     }
 
@@ -163,7 +163,7 @@ methodmap Plane
         }
         public set(int type)
         {
-            StoreToAddress(view_as<Address>(this) + view_as<Address>(16), view_as<int>(type), NumberType_Int8);
+            StoreToAddress(view_as<Address>(this) + view_as<Address>(16), view_as<int>(type), NumberType_Int8, false);
         }
     }
 
@@ -175,7 +175,7 @@ methodmap Plane
         }
         public set(int signbits)
         {
-            StoreToAddress(view_as<Address>(this) + view_as<Address>(17), view_as<int>(signbits), NumberType_Int8);
+            StoreToAddress(view_as<Address>(this) + view_as<Address>(17), view_as<int>(signbits), NumberType_Int8, false);
         }
     }
 };
@@ -308,7 +308,7 @@ methodmap IPredictionSystem
 
         public set(Address m_pSuppressHost)
         {
-            StoreToAddress(view_as<Address>(this) + view_as<Address>(12), view_as<int>(m_pSuppressHost), NumberType_Int32);
+            StoreToAddress(view_as<Address>(this) + view_as<Address>(12), view_as<int>(m_pSuppressHost), NumberType_Int32, false);
         }
     }
 };
@@ -401,9 +401,9 @@ float[] LoadFromVectorAddress(any vector)
 
 void StoreToVectorAddress(const float array[3], any vector)
 {
-    StoreToAddress(view_as<Address>(vector) + view_as<Address>(0*4), array[0], NumberType_Int32);
-    StoreToAddress(view_as<Address>(vector) + view_as<Address>(1*4), array[1], NumberType_Int32);
-    StoreToAddress(view_as<Address>(vector) + view_as<Address>(2*4), array[2], NumberType_Int32);
+    StoreToAddress(view_as<Address>(vector) + view_as<Address>(0*4), array[0], NumberType_Int32, false);
+    StoreToAddress(view_as<Address>(vector) + view_as<Address>(1*4), array[1], NumberType_Int32, false);
+    StoreToAddress(view_as<Address>(vector) + view_as<Address>(2*4), array[2], NumberType_Int32, false);
 }
 
 
@@ -3420,7 +3420,7 @@ void Sync_OnPlayerRunCmdPost(int client)
     g_player_simulating = client;
 
     // If one of the player's projectiles has another player as their move parent, then m_pHostPlayer gets set to null after simulating the other player
-    StoreToAddress(g_sync_movehelper + view_as<Address>(8), GetEntityAddress(client), NumberType_Int32);
+    StoreToAddress(g_sync_movehelper + view_as<Address>(8), GetEntityAddress(client), NumberType_Int32, false);
 
     g_globals.curtime = curtime_player;
     g_globals.frametime = frametime_player;
@@ -3630,8 +3630,8 @@ methodmap BitBuffer
         dword1 ^= ( mask1 & ( value ^ dword1 ) );
         dword2 ^= ( mask2 & ( value ^ dword2 ) );
 
-        StoreToAddress(dword2_address, dword2, NumberType_Int32);
-        StoreToAddress(dword1_address, dword1, NumberType_Int32);
+        StoreToAddress(dword2_address, dword2, NumberType_Int32, false);
+        StoreToAddress(dword1_address, dword1, NumberType_Int32, false);
 
         return numbits;
     }
@@ -4163,22 +4163,22 @@ MRESReturn Fakedelay_Detour_Post_CGameClient__SendSnapshot(Address pThis, DHookP
         prop = g_projs[client][i].message.pos;
         if (prop.bit != -1)
             for (int offset = 0; offset < 3+1; offset++)
-                StoreToAddress(view_as<Address>(buffer) + view_as<Address>((prop.bit / 32) * 4) + view_as<Address>(offset*4), g_datapos[i][offset], NumberType_Int32);
+                StoreToAddress(view_as<Address>(buffer) + view_as<Address>((prop.bit / 32) * 4) + view_as<Address>(offset*4), g_datapos[i][offset], NumberType_Int32, false);
 
         prop = g_projs[client][i].message.rot;
         if (prop.bit != -1)
             for (int offset = 0; offset < 3+1; offset++)
-                StoreToAddress(view_as<Address>(buffer) + view_as<Address>((prop.bit / 32) * 4) + view_as<Address>(offset*4), g_datarot[i][offset], NumberType_Int32);
+                StoreToAddress(view_as<Address>(buffer) + view_as<Address>((prop.bit / 32) * 4) + view_as<Address>(offset*4), g_datarot[i][offset], NumberType_Int32, false);
 
         prop = g_projs[client][i].message.vel;
         if (prop.bit != -1)
             for (int offset = 0; offset < 3+1; offset++)
-                StoreToAddress(view_as<Address>(buffer) + view_as<Address>((prop.bit / 32) * 4) + view_as<Address>(offset*4), g_datavel[i][offset], NumberType_Int32);
+                StoreToAddress(view_as<Address>(buffer) + view_as<Address>((prop.bit / 32) * 4) + view_as<Address>(offset*4), g_datavel[i][offset], NumberType_Int32, false);
 
         prop = g_projs[client][i].message.angvel;
         if (prop.bit != -1)
             for (int offset = 0; offset < 3+1; offset++)
-                StoreToAddress(view_as<Address>(buffer) + view_as<Address>((prop.bit / 32) * 4) + view_as<Address>(offset*4), g_dataangvel[i][offset], NumberType_Int32);
+                StoreToAddress(view_as<Address>(buffer) + view_as<Address>((prop.bit / 32) * 4) + view_as<Address>(offset*4), g_dataangvel[i][offset], NumberType_Int32, false);
     }
 
     return MRES_Ignored;
