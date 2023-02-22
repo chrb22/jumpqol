@@ -1908,7 +1908,7 @@ public void OnPluginStart()
     g_settings[SETTING_SYNC].Init(true, false);
 
     g_settings[SETTING_FAKEDELAY].name = "fakedelay";
-    g_settings[SETTING_FAKEDELAY].desc = "Tries to display rockets as if you were on the specified delay (ping + interp).";
+    g_settings[SETTING_FAKEDELAY].desc = "Tries to display rockets as if you were on the specified delay (scoreboard ping + net_graph lerp).";
     g_settings[SETTING_FAKEDELAY].expl = "-1: Disable.\n0 or above: Delay to fake in ms.";
     g_settings[SETTING_FAKEDELAY].type = SETTING_INT;
     g_settings[SETTING_FAKEDELAY].f_init = Fakedelay_Init;
