@@ -3208,6 +3208,7 @@ void Flushslopefix_Stop()
 }
 
 Plane g_plane = view_as<Plane>(Address_Null);
+float g_dist = 0.0;
 MRESReturn Detour_Pre_CM_ClipBoxToBrush(DHookParam hParams)
 {
     g_plane = view_as<Plane>(Address_Null);
@@ -3283,13 +3284,10 @@ MRESReturn Detour_Pre_CM_ClipBoxToBrush(DHookParam hParams)
         return MRES_Ignored;
 
     g_plane = plane;
+    g_dist = plane.dist;
 
-    // Invert plane to prevent it from being used in collisions
-    g_plane.dist *= -1.0;
-    g_plane.normal.x *= -1.0;
-    g_plane.normal.y *= -1.0;
-    g_plane.normal.z *= -1.0;
-    g_plane.signbits ^= (1 << g_plane.type);
+    // Push out plane to prevent it from being used in collisions
+    g_plane.dist += 5000.0;
 
     return MRES_Handled;
 }
@@ -3299,11 +3297,7 @@ MRESReturn Detour_Post_CM_ClipBoxToBrush(DHookParam hParams)
     if (g_plane == view_as<Plane>(Address_Null))
         return MRES_Ignored;
 
-    g_plane.dist *= -1.0;
-    g_plane.normal.x *= -1.0;
-    g_plane.normal.y *= -1.0;
-    g_plane.normal.z *= -1.0;
-    g_plane.signbits ^= (1 << g_plane.type);
+    g_plane.dist = g_dist;
 
     g_plane = view_as<Plane>(Address_Null);
 
