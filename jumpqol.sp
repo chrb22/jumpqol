@@ -1145,6 +1145,8 @@ enum struct Projectile
 
     ProjectileMessage message;
 
+    bool updated;
+
     int frame;
     int buffer;
 
@@ -1156,6 +1158,13 @@ enum struct Projectile
     bool IsMoveTypeSupported()
     {
         return this.movetype == MOVETYPE_FLY;
+    }
+
+    bool HasBaseVelocity()
+    {
+        float basevel[3];
+        GetEntDataVector(this.Entity(), FindDataMapInfo(0, "m_vecBaseVelocity"), basevel);
+        return !CompareVectors(basevel, {0.0, 0.0, 0.0});
     }
 
     void Init(int ref)
@@ -1224,9 +1233,19 @@ enum struct Projectile
         this.StoreCurrentState();
     }
 
-    void Update()
+    void Update(bool force)
     {
-        this.frame++;
+        // Already updated this frame
+        if (this.updated && !force)
+            return;
+
+        this.updated = true;
+
+        if (force)
+            this.frame++;
+        else
+            this.frame = g_tickcount_frame;
+
         this.StoreCurrentState();
     }
 
@@ -2247,6 +2266,10 @@ public void OnGameFrame()
     g_curtime_frame = g_globals.curtime;
     g_frametime_frame = g_globals.frametime;
     g_tickcount_frame = g_globals.tickcount;
+
+    for (int client = 1; client <= MaxClients; client++)
+        for (int i = 0; i < g_numprojs[client]; i++)
+            g_projs[client][i].updated = false;
 }
 
 
@@ -2312,9 +2335,10 @@ MRESReturn Required_Detour_Post_Physics_SimulateEntity(DHookParam hParams)
         return MRES_Ignored;
 
     // Can't think of a good way to tell it there was no update because of sync (maybe run this in a CBaseEntity::PhysicsSimulate detour instead?)
+    bool pushed = g_projs[proj.client][proj.index].HasBaseVelocity();
     bool sync = g_sessions[proj.client].sync;
-    if (!sync || sync && g_allow_update)
-        g_projs[proj.client][proj.index].Update();
+    if (!sync || pushed || (sync && g_allow_update))
+        g_projs[proj.client][proj.index].Update(sync && g_allow_update);
 
     return MRES_Ignored;
 }
@@ -3389,7 +3413,7 @@ void Sync_OnPlayerRunCmdPost(int client)
         if (entity == -1)
             continue;
 
-        if (!g_projs[client][i].IsMoveTypeSupported())
+        if (!g_projs[client][i].IsMoveTypeSupported() || g_projs[client][i].HasBaseVelocity())
             continue;
 
         g_globals.curtime = g_curtime_frame;
@@ -3435,7 +3459,7 @@ MRESReturn Sync_Detour_Pre_Physics_SimulateEntity(DHookParam hParams)
     if (!g_sessions[proj.client].sync)
         return MRES_Ignored;
 
-    if (!g_projs[proj.client][proj.index].IsMoveTypeSupported())
+    if (!g_projs[proj.client][proj.index].IsMoveTypeSupported() || g_projs[proj.client][proj.index].HasBaseVelocity())
         return MRES_Ignored;
 
     if (!g_allow_update)
@@ -3458,7 +3482,7 @@ MRESReturn Sync_Detour_Pre_CGameServer__SendClientMessages(Address pThis, DHookP
             if (entity == -1)
                 continue;
 
-            if (!g_projs[client][i].IsMoveTypeSupported())
+            if (!g_projs[client][i].IsMoveTypeSupported() || g_projs[client][i].HasBaseVelocity())
                 continue;
 
             SetEntPropFloat(entity, Prop_Data, "m_flSimulationTime", g_curtime_frame); // Marks entity as updated for the current frame
@@ -3483,7 +3507,7 @@ MRESReturn Sync_Detour_Post_CGameServer__SendClientMessages(Address pThis, DHook
             if (entity == -1)
                 continue;
 
-            if (!g_projs[client][i].IsMoveTypeSupported())
+            if (!g_projs[client][i].IsMoveTypeSupported() || g_projs[client][i].HasBaseVelocity())
                 continue;
 
             int frame = g_projs[client][i].frame;
@@ -3960,7 +3984,7 @@ MRESReturn Fakedelay_Detour_Pre_SV_ComputeClientPacks(DHookParam hParams)
             if (entity == -1)
                 continue;
 
-            if (!g_projs[client][i].IsMoveTypeSupported())
+            if (!g_projs[client][i].IsMoveTypeSupported() || g_projs[client][i].HasBaseVelocity())
                 continue;
 
             g_projs[client][i].message.pos.bit = -1;
@@ -4014,7 +4038,7 @@ MRESReturn Fakedelay_Detour_Post_SV_ComputeClientPacks(DHookParam hParams)
             if (entity == -1)
                 continue;
 
-            if (!g_projs[client][i].IsMoveTypeSupported())
+            if (!g_projs[client][i].IsMoveTypeSupported() || g_projs[client][i].HasBaseVelocity())
                 continue;
 
             SendProp prop;
@@ -4082,7 +4106,7 @@ MRESReturn Fakedelay_Detour_Pre_CGameClient__SendSnapshot(Address pThis, DHookPa
         if (entity == -1)
             continue;
 
-        if (!g_projs[client][i].IsMoveTypeSupported())
+        if (!g_projs[client][i].IsMoveTypeSupported() || g_projs[client][i].HasBaseVelocity())
             continue;
 
         BitBuffer buffer = g_framesnapshotmanager.packeddata.Get(entity).data;
@@ -4146,7 +4170,7 @@ MRESReturn Fakedelay_Detour_Post_CGameClient__SendSnapshot(Address pThis, DHookP
         if (entity == -1)
             continue;
         
-        if (!g_projs[client][i].IsMoveTypeSupported())
+        if (!g_projs[client][i].IsMoveTypeSupported() || g_projs[client][i].HasBaseVelocity())
             continue;
 
         BitBuffer buffer = g_framesnapshotmanager.packeddata.Get(entity).data;
