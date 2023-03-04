@@ -120,8 +120,8 @@
         {
             "CBaseCombatWeapon::ItemPostFrame"
             {
-                "windows"   "269"
-                "linux"     "275"
+                "windows"   "272"
+                "linux"     "278"
             }
         }
 
