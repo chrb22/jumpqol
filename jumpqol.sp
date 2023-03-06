@@ -1873,6 +1873,7 @@ public void OnPluginStart()
     g_settings[SETTING_ATTACK2FIRE].desc = "Lets you shoot rockets while attack2 is pressed.";
     g_settings[SETTING_ATTACK2FIRE].expl = "";
     g_settings[SETTING_ATTACK2FIRE].type = SETTING_BOOL;
+    g_settings[SETTING_ATTACK2FIRE].f_init = Attack2fire_Init;
     g_settings[SETTING_ATTACK2FIRE].f_start = Attack2fire_Start;
     g_settings[SETTING_ATTACK2FIRE].f_stop = Attack2fire_Stop;
     g_settings[SETTING_ATTACK2FIRE].f_active = SettingActiveDefaultBool;
@@ -2802,6 +2803,22 @@ _attack2fire
 
 
 
+
+Handle g_Call_Energy_FullyCharged;
+bool Attack2fire_Init()
+{
+    StartPrepSDKCall(SDKCall_Entity);
+    if (!PrepSDKCall_SetFromConf(g_gameconf, SDKConf_Signature, "CTFWeaponBase::Energy_FullyCharged"))
+        return SetError("Failed to prepare CTFWeaponBase::Energy_FullyCharged call.");
+
+    PrepSDKCall_SetReturnInfo(SDKType_Bool, SDKPass_ByValue);
+
+    g_Call_Energy_FullyCharged = EndPrepSDKCall();
+    if (g_Call_Energy_FullyCharged == INVALID_HANDLE)
+        return SetError("Failed to prepare CTFWeaponBase::Energy_FullyCharged call.");
+
+    return true;
+}
 
 bool Attack2fire_Start()
 {
