@@ -2852,7 +2852,9 @@ MRESReturn Attack2fire_Detour_Pre_CTFWeaponBase__ItemPostFrame(int entity)
     )
         return MRES_Ignored;
 
-    if (GetEntProp(entity, Prop_Data, "m_iClip1") != 0)
+    bool isenergyweapon = StrEqual(classname, "tf_weapon_particle_cannon");
+
+    if ((!isenergyweapon && GetEntProp(entity, Prop_Data, "m_iClip1") != 0) || (isenergyweapon && !SDKCall(g_Call_Energy_FullyCharged, entity)))
         SetEntPropFloat(entity, Prop_Send, "m_flNextSecondaryAttack", g_globals.curtime + 0.5);
     else
         SetEntPropFloat(entity, Prop_Send, "m_flNextSecondaryAttack", g_globals.curtime - g_globals.interval_per_tick);
