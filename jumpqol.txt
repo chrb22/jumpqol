@@ -76,6 +76,12 @@
                 "linux"     "@_ZN13CTFWeaponBase13ItemPostFrameEv"
             }
 
+            "CTFWeaponBase::Energy_FullyCharged"
+            {
+                "library"   "server"
+                "linux"     "@_ZNK13CTFWeaponBase19Energy_FullyChargedEv"
+            }
+
             "CTFGameMovement::SetGroundEntity"
             {
                 "library"   "server"

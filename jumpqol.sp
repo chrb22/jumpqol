@@ -490,6 +490,7 @@ bool g_inside_cmd = false;
 
 bool g_allow_update = false;
 
+bool g_chargemsg[MAXPLAYERS+1];
 
 
 
@@ -1487,6 +1488,7 @@ methodmap Session
 
     public void Clear()
     {
+        this.ResetChargeMessage();
         this.ClearProjectiles();
     }
 
@@ -1531,6 +1533,11 @@ methodmap Session
 
         for (int setting = 0; setting < NUM_SETTINGS; setting++)
             g_settings[setting].SetActive(this.client, false);
+    }
+
+    public void ResetChargeMessage()
+    {
+        g_chargemsg[this.client] = false;
     }
 
     public void ClearProjectiles()
@@ -1632,7 +1639,7 @@ methodmap Session
         }
     }
 
-    property bool attack2fire
+    property int attack2fire
     {
         public get()
         {
@@ -1871,14 +1878,15 @@ public void OnPluginStart()
 
     g_settings[SETTING_ATTACK2FIRE].name = "attack2fire";
     g_settings[SETTING_ATTACK2FIRE].desc = "Lets you shoot rockets while attack2 is pressed.";
-    g_settings[SETTING_ATTACK2FIRE].expl = "";
-    g_settings[SETTING_ATTACK2FIRE].type = SETTING_BOOL;
+    g_settings[SETTING_ATTACK2FIRE].expl = "0: Disable.\n1: Block attack2 from all primary rocket launchers.\n2: Allow Cow Mangler 5000 charged shots.";
+    g_settings[SETTING_ATTACK2FIRE].type = SETTING_INT;
+    g_settings[SETTING_ATTACK2FIRE].f_init = Attack2fire_Init;
     g_settings[SETTING_ATTACK2FIRE].f_start = Attack2fire_Start;
     g_settings[SETTING_ATTACK2FIRE].f_stop = Attack2fire_Stop;
-    g_settings[SETTING_ATTACK2FIRE].f_active = SettingActiveDefaultBool;
+    g_settings[SETTING_ATTACK2FIRE].f_active = SettingActiveDefaultIntG;
     g_settings[SETTING_ATTACK2FIRE].range[0] = 0.0;
-    g_settings[SETTING_ATTACK2FIRE].range[1] = 1.0;
-    g_settings[SETTING_ATTACK2FIRE].Init(true, false);
+    g_settings[SETTING_ATTACK2FIRE].range[1] = 2.0;
+    g_settings[SETTING_ATTACK2FIRE].Init(1, false);
 
     g_settings[SETTING_RAMPFIX].name = "rampfix";
     g_settings[SETTING_RAMPFIX].desc = "Prevents the event where you sometimes stop up on a ramp you should have been able to slide up.";
@@ -2803,6 +2811,22 @@ _attack2fire
 
 
 
+Handle g_Call_Energy_FullyCharged;
+bool Attack2fire_Init()
+{
+    StartPrepSDKCall(SDKCall_Entity);
+    if (!PrepSDKCall_SetFromConf(g_gameconf, SDKConf_Signature, "CTFWeaponBase::Energy_FullyCharged"))
+        return SetError("Failed to prepare CTFWeaponBase::Energy_FullyCharged call.");
+
+    PrepSDKCall_SetReturnInfo(SDKType_Bool, SDKPass_ByValue);
+
+    g_Call_Energy_FullyCharged = EndPrepSDKCall();
+    if (g_Call_Energy_FullyCharged == INVALID_HANDLE)
+        return SetError("Failed to prepare CTFWeaponBase::Energy_FullyCharged call.");
+
+    return true;
+}
+
 bool Attack2fire_Start()
 {
     if (!g_detours[DETOUR_ITEMPOSTFRAME].Enable(Attack2fire_Detour_Pre_CTFWeaponBase__ItemPostFrame, _))
@@ -2822,7 +2846,7 @@ MRESReturn Attack2fire_Detour_Pre_CTFWeaponBase__ItemPostFrame(int entity)
     if (!IsActivePlayer(client))
         return MRES_Ignored;
 
-    if (!g_sessions[client].attack2fire)
+    if (g_sessions[client].attack2fire == 0)
         return MRES_Ignored;
 
     char classname[64];
@@ -2835,10 +2859,20 @@ MRESReturn Attack2fire_Detour_Pre_CTFWeaponBase__ItemPostFrame(int entity)
     )
         return MRES_Ignored;
 
-    if (GetEntProp(entity, Prop_Data, "m_iClip1") != 0)
-        SetEntPropFloat(entity, Prop_Send, "m_flNextSecondaryAttack", g_globals.curtime + 0.5);
-    else
+    bool isenergyweapon = StrEqual(classname, "tf_weapon_particle_cannon");
+    bool isfullycharged = isenergyweapon ? SDKCall(g_Call_Energy_FullyCharged, entity) : false;
+
+    if (g_sessions[client].attack2fire == 1 && isenergyweapon && isfullycharged && !g_chargemsg[client]) {
+        if (GetClientButtons(client) & IN_ATTACK2) {
+            PrintToChat(client, "\x07FFFFFFUse\x074FDDFF !jumpqol attack2fire 2 \x07FFFFFFto allow Cow Mangler 5000 charged shots");
+            g_chargemsg[client] = !g_chargemsg[client];
+        }
+    }
+
+    if ((!isenergyweapon && GetEntProp(entity, Prop_Data, "m_iClip1") == 0) || (isenergyweapon && isfullycharged && g_sessions[client].attack2fire == 2))
         SetEntPropFloat(entity, Prop_Send, "m_flNextSecondaryAttack", g_globals.curtime - g_globals.interval_per_tick);
+    else
+        SetEntPropFloat(entity, Prop_Send, "m_flNextSecondaryAttack", g_globals.curtime + 0.5);
 
     return MRES_Handled;
 }
