@@ -490,6 +490,7 @@ bool g_inside_cmd = false;
 
 bool g_allow_update = false;
 
+bool g_chargemsg[MAXPLAYERS+1];
 
 
 
@@ -1487,6 +1488,7 @@ methodmap Session
 
     public void Clear()
     {
+        this.ResetChargeMessage();
         this.ClearProjectiles();
     }
 
@@ -1531,6 +1533,11 @@ methodmap Session
 
         for (int setting = 0; setting < NUM_SETTINGS; setting++)
             g_settings[setting].SetActive(this.client, false);
+    }
+
+    public void ResetChargeMessage()
+    {
+        g_chargemsg[this.client] = false;
     }
 
     public void ClearProjectiles()
