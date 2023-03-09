@@ -2846,7 +2846,7 @@ MRESReturn Attack2fire_Detour_Pre_CTFWeaponBase__ItemPostFrame(int entity)
     if (!IsActivePlayer(client))
         return MRES_Ignored;
 
-    if (!g_sessions[client].attack2fire)
+    if (g_sessions[client].attack2fire == 0)
         return MRES_Ignored;
 
     char classname[64];
@@ -2860,11 +2860,19 @@ MRESReturn Attack2fire_Detour_Pre_CTFWeaponBase__ItemPostFrame(int entity)
         return MRES_Ignored;
 
     bool isenergyweapon = StrEqual(classname, "tf_weapon_particle_cannon");
+    bool isfullycharged = isenergyweapon ? SDKCall(g_Call_Energy_FullyCharged, entity) : false;
 
-    if ((!isenergyweapon && GetEntProp(entity, Prop_Data, "m_iClip1") != 0) || (isenergyweapon && !SDKCall(g_Call_Energy_FullyCharged, entity)))
-        SetEntPropFloat(entity, Prop_Send, "m_flNextSecondaryAttack", g_globals.curtime + 0.5);
-    else
+    if (g_sessions[client].attack2fire == 1 && isenergyweapon && isfullycharged && !g_chargemsg[client]) {
+        if (GetClientButtons(client) & IN_ATTACK2) {
+            PrintToChat(client, "\x07FFFFFFUse\x074FDDFF !jumpqol attack2fire 2 \x07FFFFFFto allow Cow Mangler 5000 charged shots");
+            g_chargemsg[client] = !g_chargemsg[client];
+        }
+    }
+
+    if ((!isenergyweapon && GetEntProp(entity, Prop_Data, "m_iClip1") == 0) || (isenergyweapon && isfullycharged && g_sessions[client].attack2fire == 2))
         SetEntPropFloat(entity, Prop_Send, "m_flNextSecondaryAttack", g_globals.curtime - g_globals.interval_per_tick);
+    else
+        SetEntPropFloat(entity, Prop_Send, "m_flNextSecondaryAttack", g_globals.curtime + 0.5);
 
     return MRES_Handled;
 }
