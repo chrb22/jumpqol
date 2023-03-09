@@ -2869,7 +2869,7 @@ MRESReturn Attack2fire_Detour_Pre_CTFWeaponBase__ItemPostFrame(int entity)
         g_chargemsg[client] = true;
     }
 
-    if (cancharge && g_sessions[client].attack2fire == 2)
+    if (GetEntProp(entity, Prop_Data, "m_iClip1") == 0 || cancharge && g_sessions[client].attack2fire == 2)
         SetEntPropFloat(entity, Prop_Send, "m_flNextSecondaryAttack", g_globals.curtime - g_globals.interval_per_tick);
     else
         SetEntPropFloat(entity, Prop_Send, "m_flNextSecondaryAttack", g_globals.curtime + 0.5);
