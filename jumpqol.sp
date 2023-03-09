@@ -490,7 +490,6 @@ bool g_inside_cmd = false;
 
 bool g_allow_update = false;
 
-bool g_chargemsg[MAXPLAYERS+1];
 
 
 
@@ -1460,6 +1459,8 @@ int GetDelay(int client)
 
 
 
+
+bool g_chargemsg[MAXPLAYERS+1];
 
 methodmap Session
 {
@@ -2859,17 +2860,16 @@ MRESReturn Attack2fire_Detour_Pre_CTFWeaponBase__ItemPostFrame(int entity)
     )
         return MRES_Ignored;
 
-    bool isenergyweapon = StrEqual(classname, "tf_weapon_particle_cannon");
-    bool isfullycharged = isenergyweapon ? SDKCall(g_Call_Energy_FullyCharged, entity) : false;
+    bool cancharge = StrEqual(classname, "tf_weapon_particle_cannon") ? SDKCall(g_Call_Energy_FullyCharged, entity) : false;
+    if (GetClientButtons(client) & IN_ATTACK)
+        cancharge = false;
 
-    if (g_sessions[client].attack2fire == 1 && isenergyweapon && isfullycharged && !g_chargemsg[client]) {
-        if (GetClientButtons(client) & IN_ATTACK2) {
-            PrintToChat(client, "\x07FFFFFFUse\x074FDDFF !jumpqol attack2fire 2 \x07FFFFFFto allow Cow Mangler 5000 charged shots");
-            g_chargemsg[client] = !g_chargemsg[client];
-        }
+    if (cancharge && g_sessions[client].attack2fire == 1 && (GetClientButtons(client) & IN_ATTACK2) && !g_chargemsg[client]) {
+        PrintToChat(client, "\x01Use \x074FDDFF/jumpqol attack2fire 2\x01 to allow Cow Mangler 5000 charged shots.");
+        g_chargemsg[client] = true;
     }
 
-    if ((!isenergyweapon && GetEntProp(entity, Prop_Data, "m_iClip1") == 0) || (isenergyweapon && isfullycharged && g_sessions[client].attack2fire == 2))
+    if (cancharge && g_sessions[client].attack2fire == 2)
         SetEntPropFloat(entity, Prop_Send, "m_flNextSecondaryAttack", g_globals.curtime - g_globals.interval_per_tick);
     else
         SetEntPropFloat(entity, Prop_Send, "m_flNextSecondaryAttack", g_globals.curtime + 0.5);
