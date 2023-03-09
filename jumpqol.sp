@@ -1632,7 +1632,7 @@ methodmap Session
         }
     }
 
-    property bool attack2fire
+    property int attack2fire
     {
         public get()
         {
@@ -1871,15 +1871,15 @@ public void OnPluginStart()
 
     g_settings[SETTING_ATTACK2FIRE].name = "attack2fire";
     g_settings[SETTING_ATTACK2FIRE].desc = "Lets you shoot rockets while attack2 is pressed.";
-    g_settings[SETTING_ATTACK2FIRE].expl = "";
-    g_settings[SETTING_ATTACK2FIRE].type = SETTING_BOOL;
+    g_settings[SETTING_ATTACK2FIRE].expl = "0: Disable.\n1: Block attack2 from all primary rocket launchers.\n2: Allow Cow Mangler 5000 charged shots.";
+    g_settings[SETTING_ATTACK2FIRE].type = SETTING_INT;
     g_settings[SETTING_ATTACK2FIRE].f_init = Attack2fire_Init;
     g_settings[SETTING_ATTACK2FIRE].f_start = Attack2fire_Start;
     g_settings[SETTING_ATTACK2FIRE].f_stop = Attack2fire_Stop;
-    g_settings[SETTING_ATTACK2FIRE].f_active = SettingActiveDefaultBool;
+    g_settings[SETTING_ATTACK2FIRE].f_active = SettingActiveDefaultIntG;
     g_settings[SETTING_ATTACK2FIRE].range[0] = 0.0;
-    g_settings[SETTING_ATTACK2FIRE].range[1] = 1.0;
-    g_settings[SETTING_ATTACK2FIRE].Init(true, false);
+    g_settings[SETTING_ATTACK2FIRE].range[1] = 2.0;
+    g_settings[SETTING_ATTACK2FIRE].Init(1, false);
 
     g_settings[SETTING_RAMPFIX].name = "rampfix";
     g_settings[SETTING_RAMPFIX].desc = "Prevents the event where you sometimes stop up on a ramp you should have been able to slide up.";
