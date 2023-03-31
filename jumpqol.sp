@@ -1,6 +1,7 @@
 #pragma semicolon 1
 #pragma newdecls required
 
+#include <sourcemod>
 #include <dhooks>
 
 public Plugin myinfo =
@@ -1150,6 +1151,8 @@ enum struct Projectile
     int frame;
     int buffer;
 
+    int clientdelay;
+
     int Entity()
     {
         return EntRefToEntIndex(this.ref);
@@ -1578,6 +1581,7 @@ methodmap Session
 
         g_projs[client][index].Init(ref);
         g_projs[client][index].Activate();
+        g_projs[client][index].clientdelay = GetDelay(client);
 
         return true;
     }
@@ -4133,8 +4137,6 @@ MRESReturn Fakedelay_Detour_Pre_CGameClient__SendSnapshot(Address pThis, DHookPa
     if (g_sessions[client].fakedelay < 0)
         return MRES_Ignored;
 
-    int frame = g_tickcount_frame + GetDelay(client) - RoundToCeil(g_sessions[client].fakedelay / 1000.0 / g_globals.interval_per_tick);
-
     for (int i = 0; i < g_numprojs[client]; i++) {
         int entity = g_projs[client][i].Entity();
         if (entity == -1)
@@ -4166,6 +4168,8 @@ MRESReturn Fakedelay_Detour_Pre_CGameClient__SendSnapshot(Address pThis, DHookPa
         if (propinfo.bit != -1)
             for (int offset = 0; offset < 3+1; offset++)
                 g_dataangvel[i][offset] = LoadFromAddress(view_as<Address>(buffer) + view_as<Address>((propinfo.bit / 32) * 4) + view_as<Address>(offset*4), NumberType_Int32);
+
+        int frame = g_tickcount_frame + g_projs[client][i].clientdelay - RoundToCeil(g_sessions[client].fakedelay / 1000.0 / g_globals.interval_per_tick);
 
         ProjectileState state;
         state = g_projs[client][i].GetState(frame);
