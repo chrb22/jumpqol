@@ -9,7 +9,7 @@ public Plugin myinfo =
     name = "JumpQoL",
     author = "ILDPRUT",
     description = "Adds various improvements to jumping.",
-    version = "1.0.1",
+    version = "1.0.2",
 }
 
 
@@ -1925,7 +1925,7 @@ public void OnPluginStart()
     g_settings[SETTING_FLUSHSLOPEFIX].f_active = SettingActiveDefaultIntG;
     g_settings[SETTING_FLUSHSLOPEFIX].range[0] = 0.0;
     g_settings[SETTING_FLUSHSLOPEFIX].range[1] = 2.0;
-    g_settings[SETTING_FLUSHSLOPEFIX].Init(2, false);
+    g_settings[SETTING_FLUSHSLOPEFIX].Init(0, false);
 
     g_settings[SETTING_SYNC].name = "sync";
     g_settings[SETTING_SYNC].desc = "Fixes rockets getting desynced with the shooter to remove randomness.";
