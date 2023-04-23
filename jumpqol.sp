@@ -878,12 +878,13 @@ enum struct Setting
 
             static GlobalForward s_Call_OnSettingChange;
             if (!s_Call_OnSettingChange)
-                s_Call_OnSettingChange = new GlobalForward("Jumpqol_OnSettingChange", ET_Event, Param_String, Param_Cell, Param_Cell, Param_Cell);
+                s_Call_OnSettingChange = new GlobalForward("Jumpqol_OnSettingChange", ET_Event, Param_String, Param_Cell, Param_Cell, Param_Cell, Param_Cell);
 
             SettingAllow allow_api;
             Call_StartForward(s_Call_OnSettingChange);
             Call_PushString(this.name);
             Call_PushCell(client);
+            Call_PushCell(this.type);
             Call_PushCell(this.values[client]);
             Call_PushCell(value);
             Call_Finish(allow_api);
@@ -915,11 +916,12 @@ enum struct Setting
 
         static GlobalForward s_Call_OnSettingChanged;
         if (!s_Call_OnSettingChanged)
-            s_Call_OnSettingChanged = new GlobalForward("Jumpqol_OnSettingChanged", ET_Ignore, Param_String, Param_Cell, Param_Cell, Param_Cell);
+            s_Call_OnSettingChanged = new GlobalForward("Jumpqol_OnSettingChanged", ET_Ignore, Param_String, Param_Cell, Param_Cell, Param_Cell, Param_Cell);
 
         Call_StartForward(s_Call_OnSettingChanged);
         Call_PushString(this.name);
         Call_PushCell(client);
+        Call_PushCell(this.type);
         Call_PushCell(this.values[client]);
         Call_PushCell(value);
         Call_Finish();
