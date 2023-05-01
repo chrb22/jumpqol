@@ -3990,6 +3990,9 @@ bool Fakedelay_Init()
 
 bool Fakedelay_Start()
 {
+    if (FindConVar("sv_parallel_sendsnapshot").BoolValue == true)
+        return SetError("ConVar sv_parallel_sendsnapshot must be set to 0.");
+    
     if (!g_detours[DETOUR_SV_COMPUTECLIENTPACKS].Enable(Fakedelay_Detour_Pre_SV_ComputeClientPacks, Fakedelay_Detour_Post_SV_ComputeClientPacks))
         return false;
 
