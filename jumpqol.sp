@@ -3880,11 +3880,16 @@ enum struct bf_read
 
 // Looks through SendProps of a packed entity like SendTable_CalcDelta does
 Handle g_Call_SkipProp[7];
-void FindProjectileBitOffsets(int client, int index)
+bool FindProjectileBitOffsets(int client, int index)
 {
     int entity = g_projs[client][index].Entity();
-    BitBuffer buffer = g_framesnapshotmanager.packeddata.Get(entity).data;
-    int numbits = g_framesnapshotmanager.packeddata.Get(entity).numbits;
+
+    PackedEntity packed = g_framesnapshotmanager.packeddata.Get(entity);
+    if (packed == view_as<PackedEntity>(Address_Null))
+        return false;
+
+    BitBuffer buffer = packed.data;
+    int numbits = packed.numbits;
 
     bf_read read;
     read.m_pData = buffer;
@@ -3947,6 +3952,8 @@ void FindProjectileBitOffsets(int client, int index)
 
         SDKCall(g_Call_SkipProp[prop.type], prop, read);
     }
+
+    return true;
 }
 
 
@@ -4102,7 +4109,8 @@ MRESReturn Fakedelay_Detour_Post_SV_ComputeClientPacks(DHookParam hParams)
             if (prop && !UseRealCoordMP(prop))
                 SetEntDataVector(entity, prop.offset, g_fillangvel[client][i], false);
 
-            FindProjectileBitOffsets(client, i);
+            if (!FindProjectileBitOffsets(client, i))
+                continue;
 
             BitBuffer buffer = g_framesnapshotmanager.packeddata.Get(entity).data;
 
