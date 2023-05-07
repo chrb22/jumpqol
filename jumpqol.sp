@@ -726,17 +726,21 @@ enum struct Setting
         char string_convar[128];
         char string_desc[512];
 
-        Format(string_convar, 128, "sm_jumpqol_%s_default", this.name);
-        Format(string_desc, 512, "%s\n%s", this.desc, this.expl);
-        this.convar_default = CreateConVar(string_convar, string_value, string_desc, _, true, this.range[0], true, this.range[1]);
-        this.convar_default.SetString(string_value);
-        this.convar_default.AddChangeHook(ConVarChanged_Setting_Default);
+        if (this.convar_default == null) {
+            Format(string_convar, 128, "sm_jumpqol_%s_default", this.name);
+            Format(string_desc, 512, "%s\n%s", this.desc, this.expl);
+            this.convar_default = CreateConVar(string_convar, string_value, string_desc, _, true, this.range[0], true, this.range[1]);
+            this.convar_default.SetString(string_value);
+            this.convar_default.AddChangeHook(ConVarChanged_Setting_Default);
+        }
 
-        Format(string_convar, 128, "sm_jumpqol_%s_enforce", this.name);
-        IntToString(value_enforce, string_value, 32);
-        this.convar_enforce = CreateConVar(string_convar, string_value, "", _, true, 0.0, true, 1.0);
-        this.convar_enforce.SetString(string_value);
-        this.convar_enforce.AddChangeHook(ConVarChanged_Setting_Enforce);
+        if (this.convar_enforce == null) {
+            Format(string_convar, 128, "sm_jumpqol_%s_enforce", this.name);
+            IntToString(value_enforce, string_value, 32);
+            this.convar_enforce = CreateConVar(string_convar, string_value, "", _, true, 0.0, true, 1.0);
+            this.convar_enforce.SetString(string_value);
+            this.convar_enforce.AddChangeHook(ConVarChanged_Setting_Enforce);
+        }
 
         return true;
     }
@@ -3961,8 +3965,11 @@ bool FindProjectileBitOffsets(int client, int index)
 
 
 bool Fakedelay_Init()
-{
-    if (FindConVar("sv_parallel_sendsnapshot").BoolValue == true)
+{   
+    ConVar sv_parallel_sendsnapshot = FindConVar("sv_parallel_sendsnapshot");
+    HookConVarChange(sv_parallel_sendsnapshot, Fakedelay_Hook_sv_parallel_sendsnapshot);
+
+    if (sv_parallel_sendsnapshot.BoolValue == true)
         return SetError("ConVar sv_parallel_sendsnapshot must be set to 0.");
 
     g_framesnapshotmanager = view_as<CFrameSnapshotManager>(GameConfGetAddress(g_gameconf, "framesnapshotmanager"));
@@ -3997,9 +4004,6 @@ bool Fakedelay_Init()
 
 bool Fakedelay_Start()
 {
-    if (FindConVar("sv_parallel_sendsnapshot").BoolValue == true)
-        return SetError("ConVar sv_parallel_sendsnapshot must be set to 0.");
-    
     if (!g_detours[DETOUR_SV_COMPUTECLIENTPACKS].Enable(Fakedelay_Detour_Pre_SV_ComputeClientPacks, Fakedelay_Detour_Post_SV_ComputeClientPacks))
         return false;
 
@@ -4014,6 +4018,29 @@ void Fakedelay_Stop()
     g_detours[DETOUR_SV_COMPUTECLIENTPACKS].Disable(Fakedelay_Detour_Pre_SV_ComputeClientPacks, Fakedelay_Detour_Post_SV_ComputeClientPacks);
 
     g_detours[DETOUR_SENDSNAPSHOT].Disable(Fakedelay_Detour_Pre_CGameClient__SendSnapshot, Fakedelay_Detour_Post_CGameClient__SendSnapshot);
+}
+
+void Fakedelay_Hook_sv_parallel_sendsnapshot(ConVar convar, const char[] value_old, const char[] value_new)
+{
+    if (convar.BoolValue && g_settings[SETTING_FAKEDELAY].working)
+    {
+        if (g_settings[SETTING_FAKEDELAY].numusing > 0)
+            Fakedelay_Stop();
+
+        g_settings[SETTING_FAKEDELAY].working = false;
+        g_settings[SETTING_FAKEDELAY].numusing = 0;
+
+        bool setting_default = g_settings[SETTING_FAKEDELAY].GetDefault();
+        for (int client = 1; client <= MAXPLAYERS; client++) {
+            g_settings[SETTING_FAKEDELAY].active[client] = false;
+            g_settings[SETTING_FAKEDELAY].values[client] = setting_default;
+            g_settings[SETTING_FAKEDELAY].prefs[client] = setting_default;
+        }
+    }
+    else {
+        UnhookConVarChange(convar, Fakedelay_Hook_sv_parallel_sendsnapshot);
+        g_settings[SETTING_FAKEDELAY].Init(-1, false);
+    }
 }
 
 float g_fillpos[MAXPLAYERS+1][MAX_PROJECTILES][3];
