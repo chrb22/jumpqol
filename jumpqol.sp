@@ -9,7 +9,7 @@ public Plugin myinfo =
     name = "JumpQoL",
     author = "ILDPRUT",
     description = "Adds various improvements to jumping.",
-    version = "1.0.2",
+    version = "1.0.3",
 }
 
 
@@ -407,6 +407,17 @@ void StoreToVectorAddress(const float array[3], any vector)
     StoreToAddress(view_as<Address>(vector) + view_as<Address>(2*4), array[2], NumberType_Int32, false);
 }
 
+int LoadFromStringAddress(Address cstring, char[] string)
+{
+    int i = 0;
+    do {
+        string[i] = LoadFromAddress(cstring + view_as<Address>(i), NumberType_Int8);
+    }
+    while (string[i++] != 0);
+
+    return i - 1;
+}
+
 
 
 
@@ -570,6 +581,7 @@ enum struct Detour
 enum
 {
     DETOUR_PHYSICS_SIMULATEENTITY,
+    DETOUR_SERVICEEVENTS,
     DETOUR_ITEMPOSTFRAME,
     DETOUR_FIREPIPEBOMB,
     DETOUR_UTIL_DECALTRACE,
@@ -1095,6 +1107,20 @@ _projectile
 
 
 
+int GetOwner(int entity)
+{
+    int owner = GetEntPropEnt(entity, Prop_Data, "m_hOwnerEntity");
+    if (owner == -1 && HasEntProp(entity, Prop_Send, "m_hThrower"))
+        owner = GetEntPropEnt(entity, Prop_Send, "m_hThrower");
+    else if (owner != -1 && HasEntProp(owner, Prop_Send, "m_hBuilder"))
+        owner = GetEntPropEnt(owner, Prop_Send, "m_hBuilder");
+
+    return owner;
+}
+
+
+
+
 
 enum struct SendPropInfo
 {
@@ -1123,17 +1149,17 @@ enum struct ProjectileState
 
     void ReadFrom(int entity)
     {
-        GetEntDataVector(entity, FindDataMapInfo(0, "m_vecOrigin"), this.pos);
+        GetEntDataVector(entity, FindDataMapInfo(0, "m_vecAbsOrigin"), this.pos);
         GetEntDataVector(entity, FindDataMapInfo(0, "m_angRotation"), this.rot);
-        GetEntDataVector(entity, FindDataMapInfo(0, "m_vecVelocity"), this.vel);
+        GetEntDataVector(entity, FindDataMapInfo(0, "m_vecAbsVelocity"), this.vel);
         GetEntDataVector(entity, FindDataMapInfo(0, "m_vecAngVelocity"), this.angvel);
     }
 
     void WriteTo(int entity)
     {
-        SetEntDataVector(entity, FindDataMapInfo(0, "m_vecOrigin"), this.pos, true);
+        SetEntDataVector(entity, FindDataMapInfo(0, "m_vecAbsOrigin"), this.pos, true);
         SetEntDataVector(entity, FindDataMapInfo(0, "m_angRotation"), this.rot, true);
-        SetEntDataVector(entity, FindDataMapInfo(0, "m_vecVelocity"), this.vel, true);
+        SetEntDataVector(entity, FindDataMapInfo(0, "m_vecAbsVelocity"), this.vel, true);
         SetEntDataVector(entity, FindDataMapInfo(0, "m_vecAngVelocity"), this.angvel, true);
     }
 }
@@ -1157,6 +1183,8 @@ enum struct Projectile
     int frame;
     int buffer;
 
+    int frame_manipulated;
+
     int clientdelay;
 
     int Entity()
@@ -1174,6 +1202,16 @@ enum struct Projectile
         float basevel[3];
         GetEntDataVector(this.Entity(), FindDataMapInfo(0, "m_vecBaseVelocity"), basevel);
         return !CompareVectors(basevel, {0.0, 0.0, 0.0});
+    }
+
+    bool IsManipulated()
+    {
+        return g_tickcount_frame <= this.frame_manipulated + 3; // 3 extra frames for good measure
+    }
+
+    bool IsPredictable()
+    {
+        return this.IsMoveTypeSupported() && !this.HasBaseVelocity() && !this.IsManipulated();
     }
 
     void Init(int ref)
@@ -1775,6 +1813,11 @@ public void OnPluginStart()
         CallConv_CDECL, ReturnType_Void, ThisPointer_Ignore,
         {HookParamType_CBaseEntity, HookParamType_Unknown}
     );
+    g_detours[DETOUR_SERVICEEVENTS].Init(
+        "CEventQueue::ServiceEvents",
+        CallConv_THISCALL, ReturnType_Void, ThisPointer_Address,
+        {HookParamType_Unknown}
+    );
     g_detours[DETOUR_ITEMPOSTFRAME].Init(
         "CTFWeaponBase::ItemPostFrame",
         CallConv_THISCALL, ReturnType_Void, ThisPointer_CBaseEntity,
@@ -2261,6 +2304,7 @@ _required
 
 
 
+Handle g_Required_Call_CBaseFilter__PassesFilter;
 bool Required_Init()
 {
     g_globals = Globals(GameConfGetAddress(g_gameconf, "gpGlobals"));
@@ -2270,8 +2314,24 @@ bool Required_Init()
     if (!g_detours[DETOUR_PHYSICS_SIMULATEENTITY].Enable(Required_Detour_Pre_Physics_SimulateEntity, Required_Detour_Post_Physics_SimulateEntity))
         return false;
 
+    if (!g_detours[DETOUR_SERVICEEVENTS].Enable(Required_Detour_Pre_CEventQueue__ServiceEvents, _))
+        return false;
+
     if (!g_detours[DETOUR_ITEMPOSTFRAME].Enable(Required_Detour_Pre_CTFWeaponBase__ItemPostFrame, Required_Detour_Post_CTFWeaponBase__ItemPostFrame))
         return false;
+
+    StartPrepSDKCall(SDKCall_Entity);
+    if (!PrepSDKCall_SetFromConf(g_gameconf, SDKConf_Signature, "CBaseFilter::PassesFilter"))
+        return SetError("Failed to prepare CBaseFilter::PassesFilter call.");
+
+    PrepSDKCall_AddParameter(SDKType_CBaseEntity, SDKPass_Pointer); // pCaller (trigger)
+    PrepSDKCall_AddParameter(SDKType_CBaseEntity, SDKPass_Pointer); // pEntity (projectile)
+
+    PrepSDKCall_SetReturnInfo(SDKType_Bool, SDKPass_Plain);
+
+    g_Required_Call_CBaseFilter__PassesFilter = EndPrepSDKCall();
+    if (g_Required_Call_CBaseFilter__PassesFilter == INVALID_HANDLE)
+        return SetError("Failed to prepare CBaseFilter::PassesFilter call.");
 
     return true;
 }
@@ -2354,10 +2414,148 @@ MRESReturn Required_Detour_Post_Physics_SimulateEntity(DHookParam hParams)
         return MRES_Ignored;
 
     // Can't think of a good way to tell it there was no update because of sync (maybe run this in a CBaseEntity::PhysicsSimulate detour instead?)
-    bool pushed = g_projs[proj.client][proj.index].HasBaseVelocity();
+    bool predictable = g_projs[proj.client][proj.index].IsPredictable();
     bool sync = g_sessions[proj.client].sync;
-    if (!sync || pushed || (sync && g_allow_update))
+    if (!sync || !predictable || (sync && g_allow_update))
         g_projs[proj.client][proj.index].Update(sync && g_allow_update);
+
+    float pos[3];
+    float vel[3];
+    GetEntPropVector(entity, Prop_Data, "m_vecAbsOrigin", pos);
+    GetEntPropVector(entity, Prop_Data, "m_vecAbsVelocity", vel);
+    TR_EnumerateEntitiesSphere(pos, 5.0*GetVectorLength(vel)*g_globals.interval_per_tick, PARTITION_TRIGGER_EDICTS, Required_CheckTriggerFilter, entity);
+
+    return MRES_Ignored;
+}
+
+bool Required_CheckTriggerFilter(int trigger, any entity)
+{
+    char classname[64];
+    GetEntityClassname(trigger, classname, sizeof(classname));
+
+    if (strncmp(classname, "trigger_", 8) != 0)
+        return true;
+
+    int filter = GetEntPropEnt(trigger, Prop_Data, "m_hFilter");
+    bool negated = filter != -1 ? view_as<bool>(GetEntProp(filter, Prop_Data, "m_bNegated", 1)) : false;
+
+    bool filters = false;
+    if (filter != -1 && !negated)
+        filters = SDKCall(g_Required_Call_CBaseFilter__PassesFilter, filter, trigger, entity);
+
+    if (filters) {
+        ProjectileInfo proj; proj = FindProjectile(entity);
+        if (g_projs[proj.client][proj.index].frame_manipulated < g_tickcount_frame)
+            g_projs[proj.client][proj.index].frame_manipulated = g_tickcount_frame;
+    }
+
+    return true;
+}
+
+
+
+
+
+methodmap EventQueueEvent
+{
+    public EventQueueEvent(Address address)
+    {
+        return view_as<EventQueueEvent>(address);
+    }
+
+    property float m_flFireTime
+    {
+        public get()
+        {
+            return view_as<float>( LoadFromAddress(view_as<Address>(this) + view_as<Address>(0), NumberType_Int32) );
+        }
+    }
+
+    property Address m_iTarget
+    {
+        public get()
+        {
+            return view_as<Address>( LoadFromAddress(view_as<Address>(this) + view_as<Address>(4), NumberType_Int32) );
+        }
+    }
+
+    property Address m_iTargetInput
+    {
+        public get()
+        {
+            return view_as<Address>( LoadFromAddress(view_as<Address>(this) + view_as<Address>(8), NumberType_Int32) );
+        }
+    }
+
+    property EventQueueEvent m_pNext
+    {
+        public get()
+        {
+            return view_as<EventQueueEvent>( LoadFromAddress(view_as<Address>(this) + view_as<Address>(48), NumberType_Int32) );
+        }
+    }
+}
+
+MRESReturn Required_Detour_Pre_CEventQueue__ServiceEvents(Address pThis)
+{
+    int num = 0;
+    char targets[MAXPLAYERS*MAX_PROJECTILES][256];
+    int lengths[MAXPLAYERS*MAX_PROJECTILES];
+    int firetimes[MAXPLAYERS*MAX_PROJECTILES];
+
+    EventQueueEvent event = view_as<EventQueueEvent>(pThis + view_as<Address>(0));
+    while (view_as<Address>(event) != Address_Null) {
+        if (event.m_iTarget == Address_Null) {
+            event = event.m_pNext;
+            continue;
+        }
+
+        LoadFromStringAddress(event.m_iTarget, targets[num]);
+        if (StrEqual(targets[num], "")) {
+            event = event.m_pNext;
+            continue;
+        }
+
+        lengths[num] = strlen(targets[num]);
+        firetimes[num] = RoundToCeil(event.m_flFireTime / g_globals.interval_per_tick);
+
+        num++;
+
+        event = event.m_pNext;
+    }
+
+    if (num == 0)
+        return MRES_Ignored;
+
+    for (int client = 1; client <= MaxClients; client++) {
+        if (!IsActivePlayer(client))
+            continue;
+
+        for (int i = 0; i < g_numprojs[client]; i++) {
+            int entity = g_projs[client][i].Entity();
+            if (entity == -1)
+                continue;
+
+            char name[256];
+            GetEntPropString(entity, Prop_Data, "m_iName", name, sizeof(name));
+            if (StrEqual(name, ""))
+                return MRES_Ignored;
+
+            for (int j = 0; j < num; j++) {
+                if (targets[j][lengths[j] - 1] == '*') {
+                    if (strncmp(targets[j], name, lengths[j] - 1, false) != 0)
+                        continue;
+                }
+                else {
+                    if (strcmp(targets[j], name, false) != 0)
+                        continue;
+                }
+
+                if (g_projs[client][i].frame_manipulated < firetimes[j])
+                    g_projs[client][i].frame_manipulated = firetimes[j];
+            }
+        }
+    }
 
     return MRES_Ignored;
 }
@@ -2417,9 +2615,7 @@ MRESReturn Required_Detour_Post_CTFWeaponBase__ItemPostFrame(int entity)
     if (!IsValidEdict(created))
         return MRES_Ignored;
 
-    int owner = GetEntPropEnt(created, Prop_Data, "m_hOwnerEntity");
-    if (owner != -1 && HasEntProp(owner, Prop_Send, "m_hBuilder"))
-        owner = GetEntPropEnt(owner, Prop_Send, "m_hBuilder");
+    int owner = GetOwner(entity);
 
     if (!IsActivePlayer(owner))
         return MRES_Ignored;
@@ -3457,7 +3653,7 @@ void Sync_OnPlayerRunCmdPost(int client)
         if (entity == -1)
             continue;
 
-        if (!g_projs[client][i].IsMoveTypeSupported() || g_projs[client][i].HasBaseVelocity())
+        if (!g_projs[client][i].IsPredictable())
             continue;
 
         g_globals.curtime = g_curtime_frame;
@@ -3503,7 +3699,7 @@ MRESReturn Sync_Detour_Pre_Physics_SimulateEntity(DHookParam hParams)
     if (!g_sessions[proj.client].sync)
         return MRES_Ignored;
 
-    if (!g_projs[proj.client][proj.index].IsMoveTypeSupported() || g_projs[proj.client][proj.index].HasBaseVelocity())
+    if (!g_projs[proj.client][proj.index].IsPredictable())
         return MRES_Ignored;
 
     if (!g_allow_update)
@@ -3526,7 +3722,7 @@ MRESReturn Sync_Detour_Pre_CGameServer__SendClientMessages(Address pThis, DHookP
             if (entity == -1)
                 continue;
 
-            if (!g_projs[client][i].IsMoveTypeSupported() || g_projs[client][i].HasBaseVelocity())
+            if (!g_projs[client][i].IsPredictable())
                 continue;
 
             SetEntPropFloat(entity, Prop_Data, "m_flSimulationTime", g_curtime_frame); // Marks entity as updated for the current frame
@@ -3551,7 +3747,7 @@ MRESReturn Sync_Detour_Post_CGameServer__SendClientMessages(Address pThis, DHook
             if (entity == -1)
                 continue;
 
-            if (!g_projs[client][i].IsMoveTypeSupported() || g_projs[client][i].HasBaseVelocity())
+            if (!g_projs[client][i].IsPredictable())
                 continue;
 
             int frame = g_projs[client][i].frame;
@@ -4061,7 +4257,7 @@ MRESReturn Fakedelay_Detour_Pre_SV_ComputeClientPacks(DHookParam hParams)
             if (entity == -1)
                 continue;
 
-            if (!g_projs[client][i].IsMoveTypeSupported() || g_projs[client][i].HasBaseVelocity())
+            if (!g_projs[client][i].IsPredictable())
                 continue;
 
             g_projs[client][i].message.pos.bit = -1;
@@ -4115,7 +4311,7 @@ MRESReturn Fakedelay_Detour_Post_SV_ComputeClientPacks(DHookParam hParams)
             if (entity == -1)
                 continue;
 
-            if (!g_projs[client][i].IsMoveTypeSupported() || g_projs[client][i].HasBaseVelocity())
+            if (!g_projs[client][i].IsPredictable())
                 continue;
 
             SendProp prop;
@@ -4182,7 +4378,7 @@ MRESReturn Fakedelay_Detour_Pre_CGameClient__SendSnapshot(Address pThis, DHookPa
         if (entity == -1)
             continue;
 
-        if (!g_projs[client][i].IsMoveTypeSupported() || g_projs[client][i].HasBaseVelocity())
+        if (!g_projs[client][i].IsPredictable())
             continue;
 
         BitBuffer buffer = g_framesnapshotmanager.packeddata.Get(entity).data;
@@ -4248,7 +4444,7 @@ MRESReturn Fakedelay_Detour_Post_CGameClient__SendSnapshot(Address pThis, DHookP
         if (entity == -1)
             continue;
         
-        if (!g_projs[client][i].IsMoveTypeSupported() || g_projs[client][i].HasBaseVelocity())
+        if (!g_projs[client][i].IsPredictable())
             continue;
 
         BitBuffer buffer = g_framesnapshotmanager.packeddata.Get(entity).data;

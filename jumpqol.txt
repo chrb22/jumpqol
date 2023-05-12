@@ -120,6 +120,18 @@
                 // A1 ? ? ? ? D9 9D 9C FE FF FF 8B 10
                 "linux"     "\xA1\x2A\x2A\x2A\x2A\xD9\x9D\x9C\xFE\xFF\xFF\x8B\x10"
             }
+
+            "CBaseFilter::PassesFilter"
+            {
+                "library"   "server"
+                "linux"     "@_ZN11CBaseFilter12PassesFilterEP11CBaseEntityS1_"
+            }
+
+            "CEventQueue::ServiceEvents"
+            {
+                "library"   "server"
+                "linux"     "@_ZN11CEventQueue13ServiceEventsEv"
+            }
         }
 
         "Offsets"
@@ -159,6 +171,11 @@
             "g_PropTypeFns"
             {
                 "signature" "g_PropTypeFns"
+            }
+
+            "g_EventQueue"
+            {
+                "signature" "g_EventQueue"
             }
 
             "CTFWeaponBaseGun::FirePipeBomb rand right max"
