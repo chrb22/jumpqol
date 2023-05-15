@@ -1149,17 +1149,17 @@ enum struct ProjectileState
 
     void ReadFrom(int entity)
     {
-        GetEntDataVector(entity, FindDataMapInfo(0, "m_vecAbsOrigin"), this.pos);
+        GetEntDataVector(entity, FindDataMapInfo(0, "m_vecOrigin"), this.pos);
         GetEntDataVector(entity, FindDataMapInfo(0, "m_angRotation"), this.rot);
-        GetEntDataVector(entity, FindDataMapInfo(0, "m_vecAbsVelocity"), this.vel);
+        GetEntDataVector(entity, FindDataMapInfo(0, "m_vecVelocity"), this.vel);
         GetEntDataVector(entity, FindDataMapInfo(0, "m_vecAngVelocity"), this.angvel);
     }
 
     void WriteTo(int entity)
     {
-        SetEntDataVector(entity, FindDataMapInfo(0, "m_vecAbsOrigin"), this.pos, true);
+        SetEntDataVector(entity, FindDataMapInfo(0, "m_vecOrigin"), this.pos, true);
         SetEntDataVector(entity, FindDataMapInfo(0, "m_angRotation"), this.rot, true);
-        SetEntDataVector(entity, FindDataMapInfo(0, "m_vecAbsVelocity"), this.vel, true);
+        SetEntDataVector(entity, FindDataMapInfo(0, "m_vecVelocity"), this.vel, true);
         SetEntDataVector(entity, FindDataMapInfo(0, "m_vecAngVelocity"), this.angvel, true);
     }
 }
