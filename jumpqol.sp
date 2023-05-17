@@ -2201,6 +2201,9 @@ void SetValueFromCommand(int client, Setting setting, const char[] value_string)
 
 Action Command_Plugin(int client, int args)
 {
+    if (!IsDedicatedServer() && client == 0)
+        client = 1;
+
     if (args == 0) {
         ReplyToCommand(client, "JumpQoL settings");
 
@@ -2257,6 +2260,9 @@ Action Command_Plugin(int client, int args)
 
 Action Command_Setting(int client, int args)
 {
+    if (!IsDedicatedServer() && client == 0)
+        client = 1;
+
     char cmd[128];
     GetCmdArg(0, cmd, 128);
     int index = GetSettingIndexFromString(cmd);
