@@ -9,7 +9,7 @@ public Plugin myinfo =
     name = "JumpQoL",
     author = "ILDPRUT",
     description = "Adds various improvements to jumping.",
-    version = "1.0.3",
+    version = "1.0.4",
 }
 
 
