@@ -422,10 +422,11 @@ int LoadFromStringAddress(Address cstring, char[] string)
 
 
 
+int g_offset_m_pServerClass;
 SendProp GetSendProp(int entity, int index)
 {
     Address m_Network = GetEntityAddress(entity) + view_as<Address>(20);
-    Address m_pServerClass = view_as<Address>(LoadFromAddress(m_Network + view_as<Address>(48), NumberType_Int32));
+    Address m_pServerClass = view_as<Address>(LoadFromAddress(m_Network + view_as<Address>(g_offset_m_pServerClass), NumberType_Int32));
     Address m_pTable = view_as<Address>(LoadFromAddress(m_pServerClass + view_as<Address>(4), NumberType_Int32));
     Address m_pPrecalc = view_as<Address>(LoadFromAddress(m_pTable + view_as<Address>(12), NumberType_Int32));
     Address props = view_as<Address>(LoadFromAddress(m_pPrecalc + view_as<Address>(44), NumberType_Int32));
@@ -1929,7 +1930,7 @@ public void OnPluginStart()
     g_settings[SETTING_RELOADFIRE].range[0] = 0.0;
     g_settings[SETTING_RELOADFIRE].range[1] = 1.0;
     g_settings[SETTING_RELOADFIRE].Init(true, false);
-
+    
     g_settings[SETTING_ATTACK2FIRE].name = "attack2fire";
     g_settings[SETTING_ATTACK2FIRE].desc = "Lets you shoot rockets while attack2 is pressed.";
     g_settings[SETTING_ATTACK2FIRE].expl = "0: Disable.\n1: Block attack2 from all primary rocket launchers.\n2: Allow Cow Mangler 5000 charged shots.";
@@ -2002,6 +2003,9 @@ public void OnPluginStart()
 
     // Config
     AutoExecConfig(true, "jumpqol");
+
+    if (!IsDedicatedServer())
+        g_settings[SETTING_ATTACK2FIRE].working = false;
 
     HookEvent("player_death", OnClientDeath);
     HookEvent("player_changeclass", OnClientChangeClass);
@@ -2310,6 +2314,10 @@ bool Required_Init()
     g_globals = Globals(GameConfGetAddress(g_gameconf, "gpGlobals"));
     if (!g_globals)
         return SetError("Failed to find gpGlobals.");
+
+    g_offset_m_pServerClass = GameConfGetOffset(g_gameconf, "CServerNetworkProperty::m_pServerClass");
+    if (g_offset_m_pServerClass == -1)
+        return SetError("Failed to get CServerNetworkProperty::m_pServerClass offset.");
 
     if (!g_detours[DETOUR_PHYSICS_SIMULATEENTITY].Enable(Required_Detour_Pre_Physics_SimulateEntity, Required_Detour_Post_Physics_SimulateEntity))
         return false;
@@ -3184,9 +3192,9 @@ _slideebfix
 Address g_slideebfix_movehelper;
 bool Slideebfix_Init()
 {
-    g_slideebfix_movehelper = GameConfGetAddress(g_gameconf, "IMoveHelper::sm_pSingleton");
+    g_slideebfix_movehelper = GameConfGetAddress(g_gameconf, "&MoveHelperServer()::s_MoveHelperServer");
     if (!g_slideebfix_movehelper)
-        return SetError("Failed to find IMoveHelper::sm_pSingleton.");
+        return SetError("Failed to find &MoveHelperServer()::s_MoveHelperServer.");
 
     return true;
 }
@@ -3604,9 +3612,9 @@ bool Sync_Init()
     if (!g_sync_te)
         return SetError("Failed to find te.");
 
-    g_sync_movehelper = GameConfGetAddress(g_gameconf, "IMoveHelper::sm_pSingleton");
+    g_sync_movehelper = GameConfGetAddress(g_gameconf, "&MoveHelperServer()::s_MoveHelperServer");
     if (!g_sync_movehelper)
-        return SetError("Failed to find IMoveHelper::sm_pSingleton.");
+        return SetError("Failed to find &MoveHelperServer()::s_MoveHelperServer.");
 
     return true;
 }
@@ -4172,9 +4180,9 @@ bool Fakedelay_Init()
     if (!g_framesnapshotmanager)
         return SetError("Failed to find framesnapshotmanager.");
 
-    Address proptypefns = GameConfGetAddress(g_gameconf, "g_PropTypeFns");
+    Address proptypefns = GameConfGetAddress(g_gameconf, "&g_PropTypeFns");
     if (!proptypefns)
-        return SetError("Failed to find g_PropTypeFns.");
+        return SetError("Failed to find &g_PropTypeFns.");
 
     // CALL SkipProp
     for (int type = 0; type < 7; type++) {

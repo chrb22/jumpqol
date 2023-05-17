@@ -8,90 +8,145 @@
             {
                 "library"   "server"
                 "linux"     "@_Z22Physics_SimulateEntityP11CBaseEntity"
+                "windows"   "\x55\x8B\xEC\x57\x8B\x7D\x2A\x83\x7F\x2A\x00"
+                // 55 8B EC 57 8B 7D ? 83 7F ? 00
             }
 
             "CGameServer::SendClientMessages"
             {
                 "library"   "engine"
                 "linux"     "@_ZN11CGameServer18SendClientMessagesEb"
+                "windows"   "\x55\x8B\xEC\x81\xEC\x30\x04\x00\x00\x53\x56\x57\x33\xDB"
+                // 55 8B EC 81 EC 30 04 00 00 53 56 57 33 DB
             }
 
             "SV_ComputeClientPacks"
             {
                 "library"   "engine"
                 "linux"     "@_Z21SV_ComputeClientPacksiPP11CGameClientP14CFrameSnapshot"
+                "windows"   "\x55\x8B\xEC\x83\xEC\x38\x8B\x0D\x2A\x2A\x2A\x2A\x53\x33\xDB"
+                // 55 8B EC 83 EC 38 8B 0D ? ? ? ? 53 33 DB
             }
 
             "CGameClient::SendSnapshot"
             {
                 "library"   "engine"
                 "linux"     "@_ZN11CGameClient12SendSnapshotEP12CClientFrame"
+                "windows"   "\x55\x8B\xEC\x83\xEC\x58\x53\x8B\xD9\x56"
+                // 55 8B EC 83 EC 58 53 8B D9 56
             }
 
-            "gpGlobals"
+            "&gpGlobals"
             {
                 "library"   "server"
                 "linux"     "@gpGlobals"
             }
 
-            "te"
+            "mov eax,[gpGlobals]"
+            {
+                "library"   "server"
+                "windows"   "\xA1\x2A\x2A\x2A\x2A\xD9\x40\x2A\xD8\x25\x2A\x2A\x2A\x2A\xD9\xC9"
+                // A1 ? ? ? ? D9 40 ? D8 25 ? ? ? ? D9 C9 in Physics_SimulateEntity
+            }
+
+            "&te"
             {
                 "library"   "server"
                 "linux"     "@te"
             }
 
-            "framesnapshotmanager"
+            "mov eax,[te]"
+            {
+                "library"   "server"
+                "windows"   "\xA1\x2A\x2A\x2A\x2A\x56\x83\x78\x2A\x00\x7E\x2A"
+                // A1 ? ? ? ? 56 83 78 ? 00 7E ? in ApplyMultiDamage
+            }
+
+            "&framesnapshotmanager"
             {
                 "library"   "engine"
                 "linux"     "@framesnapshotmanager"
             }
 
-            "IMoveHelper::sm_pSingleton"
+            "mov ecx,[framesnapshotmanager]"
+            {
+                "library"   "engine"
+                "windows"   "\x8B\x0D\x2A\x2A\x2A\x2A\x53\xE8\x2A\x2A\x2A\x2A\x8B\xF8"
+                // 8B 0D ? ? ? ? 53 E8 ? ? ? ? 8B F8 in CBaseServer::UncompressPackedEntity
+            }
+
+            "&IMoveHelper::sm_pSingleton"
             {
                 "library"   "server"
                 "linux"     "@_ZN11IMoveHelper13sm_pSingletonE"
             }
 
-            "g_PropTypeFns"
+            "mov ecx,[IMoveHelper::sm_pSingleton]"
+            {
+                "library"   "server"
+                "windows"   "\x8B\x0D\x2A\x2A\x2A\x2A\x8B\x01\xFF\x50\x2A\x8B\x07"
+                // 8B 0D ? ? ? ? 8B 01 FF 50 ? 8B 07 in CGameMovement::PlayerMove
+            }
+
+            "&g_PropTypeFns"
             {
                 "library"   "engine"
                 "linux"     "@g_PropTypeFns"
+            }
+
+            "mov eax,[eax*0x4 + g_PropTypeFns]"
+            {
+                "library"   "engine"
+                "windows"   "\x8B\x04\x85\x2A\x2A\x2A\x2A\xFF\xD0\x83\xC4\x14"
+                // 8B 04 85 ? ? ? ? FF D0 83 C4 14 in SendTable_EncodeProp inlined in SendTable_Encode
             }
 
             "UTIL_DecalTrace"
             {
                 "library"   "server"
                 "linux"     "@_Z15UTIL_DecalTraceP10CGameTracePKc"
+                "windows"   "\x55\x8B\xEC\x8B\x55\x2A\xF3\x0F\x10\x42\x2A"
+                // 55 8B EC 8B 55 ? F3 0F 10 42 ?
             }
 
             "CTFWeaponBase::ItemBusyFrame"
             {
                 "library"   "server"
                 "linux"     "@_ZN13CTFWeaponBase13ItemBusyFrameEv"
+                "windows"   "\x55\x8B\xEC\x51\x56\x57\x8B\xF1\xE8\x2A\x2A\x2A\x2A\x8B\xCE\xE8\x2A\x2A\x2A\x2A\x8B\xF8\x85\xFF\x0F\x84\x2A\x2A\x2A\x2A\x8B\x17"
+                // 55 8B EC 51 56 57 8B F1 E8 ? ? ? ? 8B CE E8 ? ? ? ? 8B F8 85 FF 0F 84 ? ? ? ? 8B 17
             }
 
             "CTFWeaponBase::ItemPostFrame"
             {
                 "library"   "server"
                 "linux"     "@_ZN13CTFWeaponBase13ItemPostFrameEv"
+                "windows"   "\x56\x57\x8B\xF1\xE8\x2A\x2A\x2A\x2A\x8B\xF8\x85\xFF\x0F\x84\x2A\x2A\x2A\x2A\x8B\x17\x8B\xCF\x8B\x92\x2A\x2A\x2A\x2A\xFF\xD2\x84\xC0\x0F\x84\x2A\x2A\x2A\x2A\x8B\x06\x8B\xCE\x53"
+                // 56 57 8B F1 E8 ? ? ? ? 8B F8 85 FF 0F 84 ? ? ? ? 8B 17 8B CF 8B 92 ? ? ? ? FF D2 84 C0 0F 84 ? ? ? ? 8B 06 8B CE 53
             }
 
             "CTFWeaponBase::Energy_FullyCharged"
             {
                 "library"   "server"
                 "linux"     "@_ZNK13CTFWeaponBase19Energy_FullyChargedEv"
+                "windows"   "\x55\x8B\xEC\x51\x56\x8B\xF1\x8B\x06\x8B\x80\x2A\x2A\x2A\x2A\xFF\xD0\xD8\x3D\x2A\x2A\x2A\x2A\xE8\x2A\x2A\x2A\x2A\x6A\x01\x6A\x00\x56\xF3\x0F\x2A\xC0\x68\x2A\x2A\x2A\x2A\x51\xF3\x0F\x11\x04\x24\xE8\x2A\x2A\x2A\x2A\x83\xC4\x14\xE8\x2A\x2A\x2A\x2A\x89\x45\x2A\x8B\xCE\x8B\x06\x8B\x80\x2A\x2A\x2A\x2A\xFF\xD0\xDA\x4D\x2A\xD9\x86\x2A\x2A\x2A\x2A"
+                // 55 8B EC 51 56 8B F1 8B 06 8B 80 ? ? ? ? FF D0 D8 3D ? ? ? ? E8 ? ? ? ? 6A 01 6A 00 56 F3 0F 2A C0 68 ? ? ? ? 51 F3 0F 11 04 24 E8 ? ? ? ? 83 C4 14 E8 ? ? ? ? 89 45 ? 8B CE 8B 06 8B 80 ? ? ? ? FF D0 DA 4D ? D9 86 ? ? ? ?
             }
 
             "CTFGameMovement::SetGroundEntity"
             {
                 "library"   "server"
                 "linux"     "@_ZN15CTFGameMovement15SetGroundEntityEP10CGameTrace"
+                "windows"   "\x55\x8B\xEC\x56\x8B\xF1\x57\x6A\x52"
+                // 55 8B EC 56 8B F1 57 6A 52
             }
 
             "CM_ClipBoxToBrush<false>"
             {
                 "library"   "engine"
                 "linux"     "@_Z17CM_ClipBoxToBrushILb0EEvP11TraceInfo_tPK8cbrush_t"
+                "windows"   "\x55\x8B\xEC\x83\xEC\x10\xB8\xFF\xFF\x00\x00"
+                // 55 8B EC 83 EC 10 B8 FF FF 00 00
             }
 
             "CTFWeaponBaseGun::FirePipeBomb"
@@ -125,12 +180,16 @@
             {
                 "library"   "server"
                 "linux"     "@_ZN11CBaseFilter12PassesFilterEP11CBaseEntityS1_"
+                "windows"   "\x55\x8B\xEC\x56\xFF\x75\x2A\x8B\xF1\xFF\x75\x2A\x8B\x06\x8B\x80\x2A\x2A\x2A\x2A"
+                // 55 8B EC 56 FF 75 ? 8B F1 FF 75 ? 8B 06 8B 80 ? ? ? ?
             }
 
             "CEventQueue::ServiceEvents"
             {
                 "library"   "server"
                 "linux"     "@_ZN11CEventQueue13ServiceEventsEv"
+                "windows"   "\x55\x8B\xEC\x81\xEC\x10\x01\x00\x00\x80\x3D\x2A\x2A\x2A\x2A\x00"
+                // 55 8B EC 81 EC 10 01 00 00 80 3D ? ? ? ? 00
             }
         }
 
@@ -138,8 +197,14 @@
         {
             "CBaseCombatWeapon::ItemPostFrame"
             {
-                "windows"   "272"
                 "linux"     "278"
+                "windows"   "272"
+            }
+
+            "CServerNetworkProperty::m_pServerClass"
+            {
+                "linux"     "48"
+                "windows"   "40"
             }
         }
 
@@ -147,35 +212,75 @@
         {
             "gpGlobals"
             {
-                "signature" "gpGlobals"
-                "read"      "0"
+                "linux"
+                {
+                    "signature" "&gpGlobals"
+                    "read"      "0" // *&gpGlobals
+                }
+                "windows"
+                {
+                    "signature" "mov eax,[gpGlobals]"
+                    "read"      "1" // &gpGlobals
+                    "read"      "0" // *&gpGlobals
+                }
             }
 
             "te"
             {
-                "signature" "te"
-                "read"      "0"
+                "linux"
+                {
+                    "signature" "&te"
+                    "read"      "0" // *&te
+                }
+                "windows"
+                {
+                    "signature" "mov eax,[te]"
+                    "read"      "1" // &te
+                    "read"      "0" // *&te
+                }
             }
 
             "framesnapshotmanager"
             {
-                "signature" "framesnapshotmanager"
-                "read"      "0"
+                "linux"
+                {
+                    "signature" "&framesnapshotmanager"
+                    "read"      "0" // *&framesnapshotmanager
+                }
+                "windows"
+                {
+                    "signature" "mov ecx,[framesnapshotmanager]"
+                    "read"      "2" // &framesnapshotmanager
+                    "read"      "0" // *&framesnapshotmanager
+                }
             }
 
-            "IMoveHelper::sm_pSingleton"
+            "&MoveHelperServer()::s_MoveHelperServer"
             {
-                "signature" "IMoveHelper::sm_pSingleton"
+                "linux"
+                {
+                    "signature" "&IMoveHelper::sm_pSingleton"
+                    // "read"      "0" // *&IMoveHelper::sm_pSingleton // not needed???
+                }
+                "windows"
+                {
+                    "signature" "mov ecx,[IMoveHelper::sm_pSingleton]"
+                    "read"      "2" // &IMoveHelper::sm_pSingleton
+                    // "read"      "0" // *&IMoveHelper::sm_pSingleton // not needed???
+                }
             }
 
-            "g_PropTypeFns"
+            "&g_PropTypeFns"
             {
-                "signature" "g_PropTypeFns"
-            }
-
-            "g_EventQueue"
-            {
-                "signature" "g_EventQueue"
+                "linux"
+                {
+                    "signature" "&g_PropTypeFns"
+                }
+                "windows"
+                {
+                    "signature" "mov eax,[eax*0x4 + g_PropTypeFns]"
+                    "read"      "3" // &g_PropTypeFns
+                }
             }
 
             "CTFWeaponBaseGun::FirePipeBomb rand right max"
