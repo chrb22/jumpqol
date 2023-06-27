@@ -9,8 +9,10 @@ public Plugin myinfo =
     name = "JumpQoL",
     author = "ILDPRUT",
     description = "Adds various improvements to jumping.",
-    version = "1.0.4",
+    version = "1.0.5",
 }
+
+#define DEBUG 0
 
 
 
@@ -2018,7 +2020,102 @@ public void OnPluginStart()
     g_pred_indices = new ArrayList(1, MAXPLAYERS*MAX_PROJECTILES);
     for (int index = 0; index < MAXPLAYERS*MAX_PROJECTILES; index++)
         g_pred_indices.Set(index, index);
+
+    #if DEBUG
+    RegConsoleCmd("sm_jumpqol_debug", Command_Debug);
+    #endif
 }
+
+
+
+
+
+/*
+_debug
+██████  ███████ ██████  ██    ██  ██████ 
+██   ██ ██      ██   ██ ██    ██ ██      
+██   ██ █████   ██████  ██    ██ ██   ███
+██   ██ ██      ██   ██ ██    ██ ██    ██
+██████  ███████ ██████   ██████   ██████ 
+*/
+#if DEBUG
+int g_debug_output = 0;
+int g_debug_target = -1;
+
+enum DebugOption
+{
+    DEBUG_NUMPROJS,
+    DEBUG_PRINT,
+    DEBUG_UPDATE,
+    DEBUG_MANIP,
+    DEBUG_SYNC,
+    DEBUG_NUM,
+}
+char debug_names[DEBUG_NUM][64] = {"numprojs", "", "update", "manip", "sync"};
+bool debug_toggles[DEBUG_NUM];
+
+Action Command_Debug(int client, int args)
+{
+    if (args == 0) {
+        ReplyToCommand(client, "Usage: sm_jumpqol_debug <target/option>\nDisable toggles with target = -1.\nAvailable options:\n(print) numprojs - Print number of tracked projectiles.\n(toggle) update - Print state of projectile after an update.\n(toggle) manip - Print when a projectile is manipulated by a trigger or event.\n(toggle) sync - Print sync variables.");
+        return Plugin_Handled;
+    }
+
+    g_debug_output = client;
+
+    char choice[64];
+    GetCmdArg(1, choice, sizeof(choice));
+
+    int target;
+    if (StringToIntEx(choice, target) != 0) {
+        if (target != -1 && !IsActivePlayer(target))
+            ReplyToCommand(client, "Invalid target.");
+        else
+            g_debug_target = target;
+
+        return Plugin_Handled;
+    }
+
+    DebugOption option = DEBUG_NUM;
+    for (int i = 0; i < view_as<int>(DEBUG_NUM); i++) {
+        if (StrEqual(choice, debug_names[i], false)) {
+            option = view_as<DebugOption>(i);
+            break;
+        }
+    }
+
+    if (option == DEBUG_NUM) {
+        ReplyToCommand(client, "Invalid option.");
+        return Plugin_Handled;
+    }
+
+    if (g_debug_target == -1) {
+        ReplyToCommand(client, "No target set.");
+        return Plugin_Handled;
+    }
+
+    if (option == DEBUG_NUMPROJS) {
+        ReplyToCommand(g_debug_output, "%d", g_numprojs[g_debug_target]);
+    }
+    else if (option < DEBUG_PRINT) {
+        if (g_numprojs[g_debug_target] == 0) {
+            ReplyToCommand(g_debug_output, "No active projectiles for target.");
+            return Plugin_Handled;
+        }
+
+        // Projectile proj;
+        // proj = g_projs[g_debug_target][0];
+        // if (option == DEBUG_STATE) {
+        //     ReplyToCommand(g_debug_output, "movetype: %s, basevel: %s, manipulated: %s, last manip frame %d, current frame: %d", proj.IsMoveTypeSupported() ? "supported" : "unsupported", proj.HasBaseVelocity() ? "yes" : "no", proj.IsManipulated() ? "yes" : "no", proj.frame_manipulated, proj.frame);
+        // }
+    }
+    else {
+        debug_toggles[option] ^= true;
+    }
+
+    return Plugin_Handled;
+}
+#endif
 
 
 
@@ -2433,6 +2530,14 @@ MRESReturn Required_Detour_Post_Physics_SimulateEntity(DHookParam hParams)
     if (!sync || !predictable || (sync && g_allow_update))
         g_projs[proj.client][proj.index].Update(sync && g_allow_update);
 
+    #if DEBUG
+    if (g_debug_output != -1 && proj.client == g_debug_target && debug_toggles[DEBUG_UPDATE]) {
+        Projectile projstruct;
+        projstruct = g_projs[proj.client][proj.index];
+        PrintToConsole(g_debug_output, "update %d - proj: %d, movetype: %s, basevel: %s, manipulated: %s, last manip frame %d, current update frame: %d", g_tickcount_frame, entity, projstruct.IsMoveTypeSupported() ? "supported" : "unsupported", projstruct.HasBaseVelocity() ? "yes" : "no", projstruct.IsManipulated() ? "yes" : "no", projstruct.frame_manipulated, projstruct.frame);
+    }
+    #endif
+
     float pos[3];
     float vel[3];
     GetEntPropVector(entity, Prop_Data, "m_vecAbsOrigin", pos);
@@ -2459,6 +2564,13 @@ bool Required_CheckTriggerFilter(int trigger, any entity)
 
     if (filters) {
         ProjectileInfo proj; proj = FindProjectile(entity);
+
+        #if DEBUG
+        if (g_debug_output != -1 && proj.client == g_debug_target && debug_toggles[DEBUG_MANIP]) {
+            PrintToConsole(g_debug_output, "manip %d - trigger - proj: %d, trigger: %d, classname: %s", g_tickcount_frame, entity, trigger, classname);
+        }
+        #endif
+
         if (g_projs[proj.client][proj.index].frame_manipulated < g_tickcount_frame)
             g_projs[proj.client][proj.index].frame_manipulated = g_tickcount_frame;
     }
@@ -2498,6 +2610,22 @@ methodmap EventQueueEvent
         public get()
         {
             return view_as<Address>( LoadFromAddress(view_as<Address>(this) + view_as<Address>(8), NumberType_Int32) );
+        }
+    }
+
+    property int m_pActivator
+    {
+        public get()
+        {
+            return view_as<int>( LoadFromAddress(view_as<Address>(this) + view_as<Address>(12), NumberType_Int32) );
+        }
+    }
+
+    property int m_pCaller
+    {
+        public get()
+        {
+            return view_as<int>( LoadFromAddress(view_as<Address>(this) + view_as<Address>(16), NumberType_Int32) );
         }
     }
 
@@ -2564,6 +2692,14 @@ MRESReturn Required_Detour_Pre_CEventQueue__ServiceEvents(Address pThis)
                     if (strcmp(targets[j], name, false) != 0)
                         continue;
                 }
+
+                #if DEBUG
+                if (g_debug_output != -1 && client == g_debug_target && debug_toggles[DEBUG_MANIP]) {
+                    char targetinput[256];
+                    LoadFromStringAddress(event.m_iTargetInput, targetinput);
+                    PrintToConsole(g_debug_output, "manip %d - event - proj: %d, m_iTarget: %s, m_iTargetInput: %s, m_pActivator %d, m_pCaller %d", g_tickcount_frame, g_projs[client][i].Entity(), targets[j], targetinput, event.m_pActivator, event.m_pCaller);
+                }
+                #endif
 
                 if (g_projs[client][i].frame_manipulated < firetimes[j])
                     g_projs[client][i].frame_manipulated = firetimes[j];
@@ -3712,6 +3848,12 @@ MRESReturn Sync_Detour_Pre_Physics_SimulateEntity(DHookParam hParams)
 
     if (!g_sessions[proj.client].sync)
         return MRES_Ignored;
+
+    #if DEBUG
+    if (g_debug_output != -1 && proj.client == g_debug_target && debug_toggles[DEBUG_SYNC]) {
+        PrintToConsole(g_debug_output, "sync: %d - proj: %d, predictable: %s, allow update: %s", g_tickcount_frame, entity, g_projs[proj.client][proj.index].IsPredictable() ? "yes" : "no", g_allow_update ? "yes" : "no");
+    }
+    #endif
 
     if (!g_projs[proj.client][proj.index].IsPredictable())
         return MRES_Ignored;
