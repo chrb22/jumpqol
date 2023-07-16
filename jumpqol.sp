@@ -1223,6 +1223,7 @@ enum struct Projectile
 
         this.ref = ref;
         this.movetype = view_as<MoveType>(GetEntProp(entity, Prop_Data, "m_MoveType"));
+        this.frame_manipulated = 0;
 
         int total = 0;
         total += view_as<int>(HasEntProp(entity, Prop_Send, "m_vecOrigin"));
