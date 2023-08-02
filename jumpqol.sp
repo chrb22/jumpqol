@@ -9,7 +9,7 @@ public Plugin myinfo =
     name = "JumpQoL",
     author = "ILDPRUT",
     description = "Adds various improvements to jumping.",
-    version = "1.0.5",
+    version = "1.0.6",
 }
 
 #define DEBUG 0
@@ -588,6 +588,7 @@ enum
     DETOUR_ITEMPOSTFRAME,
     DETOUR_FIREPIPEBOMB,
     DETOUR_UTIL_DECALTRACE,
+    DETOUR_TFPLAYERTHINK,
     DETOUR_ITEMBUSYFRAME,
     DETOUR_SETGROUNDENTITY,
     DETOUR_CM_CLIPBOXTOBRUSH,
@@ -957,6 +958,7 @@ enum
     SETTING_RANDPROJANGVEL,
     SETTING_PROJDECALS,
     SETTING_SHOWDETDECALS,
+    SETTING_KEEPBLASTSTATE,
     SETTING_RELOADFIRE,
     SETTING_ATTACK2FIRE,
     SETTING_RAMPFIX,
@@ -1684,6 +1686,14 @@ methodmap Session
         }
     }
 
+    property bool keepblaststate
+    {
+        public get()
+        {
+            return g_settings[SETTING_KEEPBLASTSTATE].values[this.client];
+        }
+    }
+
     property bool reloadfire
     {
         public get()
@@ -1837,6 +1847,11 @@ public void OnPluginStart()
         CallConv_CDECL, ReturnType_Void, ThisPointer_Ignore,
         {HookParamType_Int, HookParamType_CharPtr, HookParamType_Unknown}
     );
+    g_detours[DETOUR_TFPLAYERTHINK].Init(
+        "CTFPlayer::TFPlayerThink",
+        CallConv_THISCALL, ReturnType_Void, ThisPointer_CBaseEntity,
+        {HookParamType_Unknown}
+    );
     g_detours[DETOUR_ITEMBUSYFRAME].Init(
         "CTFWeaponBase::ItemBusyFrame",
         CallConv_THISCALL, ReturnType_Void, ThisPointer_CBaseEntity,
@@ -1921,6 +1936,18 @@ public void OnPluginStart()
     g_settings[SETTING_SHOWDETDECALS].range[0] = 0.0;
     g_settings[SETTING_SHOWDETDECALS].range[1] = 1.0;
     g_settings[SETTING_SHOWDETDECALS].Init(false, false);
+
+    g_settings[SETTING_KEEPBLASTSTATE].name = "keepblaststate";
+    g_settings[SETTING_KEEPBLASTSTATE].desc = "Prevents the blast state from getting cleared when using an explosion to leave the ground.";
+    g_settings[SETTING_KEEPBLASTSTATE].expl = "";
+    g_settings[SETTING_KEEPBLASTSTATE].type = SETTING_BOOL;
+    g_settings[SETTING_KEEPBLASTSTATE].f_init = Keepblaststate_Init;
+    g_settings[SETTING_KEEPBLASTSTATE].f_start = Keepblaststate_Start;
+    g_settings[SETTING_KEEPBLASTSTATE].f_stop = Keepblaststate_Stop;
+    g_settings[SETTING_KEEPBLASTSTATE].f_active = SettingActiveDefaultBool;
+    g_settings[SETTING_KEEPBLASTSTATE].range[0] = 0.0;
+    g_settings[SETTING_KEEPBLASTSTATE].range[1] = 1.0;
+    g_settings[SETTING_KEEPBLASTSTATE].Init(true, false);
 
     g_settings[SETTING_RELOADFIRE].name = "reloadfire";
     g_settings[SETTING_RELOADFIRE].desc = "Makes you shoot on the same tick you reload canceled (no firing sound if you only press for 1 tick).";
@@ -3091,6 +3118,72 @@ MRESReturn Showdetdecals_Detour_Pre_UTIL_DecalTrace(DHookParam hParams)
 MRESReturn Showdetdecals_Detour_Post_UTIL_DecalTrace(DHookParam hParams)
 {
     g_showdetdecals_te.m_pSuppressHost = g_showdetdecals_suppresshost;
+
+    return MRES_Ignored;
+}
+
+
+
+
+
+/*
+_keepblaststate
+██   ██ ███████ ███████ ██████  ██████  ██       █████  ███████ ████████ ███████ ████████  █████  ████████ ███████
+██  ██  ██      ██      ██   ██ ██   ██ ██      ██   ██ ██         ██    ██         ██    ██   ██    ██    ██     
+█████   █████   █████   ██████  ██████  ██      ███████ ███████    ██    ███████    ██    ███████    ██    █████  
+██  ██  ██      ██      ██      ██   ██ ██      ██   ██      ██    ██         ██    ██    ██   ██    ██    ██     
+██   ██ ███████ ███████ ██      ██████  ███████ ██   ██ ███████    ██    ███████    ██    ██   ██    ██    ███████
+*/
+
+
+
+
+
+bool Keepblaststate_Init()
+{
+    return true;
+}
+
+bool Keepblaststate_Start()
+{
+    if (!g_detours[DETOUR_TFPLAYERTHINK].Enable(Keepblaststate_Detour_Pre_CTFPlayer__TFPlayerThink, Keepblaststate_Detour_Post_CTFPlayer__TFPlayerThink))
+        return false;
+
+    return true;
+}
+
+void Keepblaststate_Stop()
+{
+    g_detours[DETOUR_TFPLAYERTHINK].Disable(Keepblaststate_Detour_Pre_CTFPlayer__TFPlayerThink, Keepblaststate_Detour_Post_CTFPlayer__TFPlayerThink);
+}
+
+int g_keepblaststate_groundentity = -1;
+MRESReturn Keepblaststate_Detour_Pre_CTFPlayer__TFPlayerThink(int client)
+{
+    if (!g_sessions[client].keepblaststate)
+        return MRES_Ignored;
+
+    g_keepblaststate_groundentity = GetEntPropEnt(client, Prop_Data, "m_hGroundEntity");
+
+    // Temporarily set the ground entity to null (only used for blast state check, so it's fine)
+    if (g_keepblaststate_groundentity != -1) {
+        float vel[3];
+        GetEntPropVector(client, Prop_Data, "m_vecAbsVelocity", vel);
+
+        if (vel[2] > 250.0)
+            SetEntPropEnt(client, Prop_Data, "m_hGroundEntity", -1);
+    }
+
+    return MRES_Ignored;
+}
+
+MRESReturn Keepblaststate_Detour_Post_CTFPlayer__TFPlayerThink(int client)
+{
+    if (!g_sessions[client].keepblaststate)
+        return MRES_Ignored;
+
+    if (g_keepblaststate_groundentity != -1)
+        SetEntPropEnt(client, Prop_Data, "m_hGroundEntity", g_keepblaststate_groundentity);
 
     return MRES_Ignored;
 }
