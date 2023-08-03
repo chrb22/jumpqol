@@ -3165,7 +3165,7 @@ MRESReturn Keepblaststate_Detour_Pre_CTFPlayer__TFPlayerThink(int client)
 
     g_keepblaststate_groundentity = GetEntPropEnt(client, Prop_Data, "m_hGroundEntity");
 
-    // Temporarily set the ground entity to null (only used for blast state check, so it's fine)
+    // Temporarily set the ground entity to null
     if (g_keepblaststate_groundentity != -1) {
         float vel[3];
         GetEntPropVector(client, Prop_Data, "m_vecAbsVelocity", vel);
