@@ -1941,7 +1941,6 @@ public void OnPluginStart()
     g_settings[SETTING_KEEPBLASTSTATE].desc = "Prevents the blast state from getting cleared when using an explosion to leave the ground.";
     g_settings[SETTING_KEEPBLASTSTATE].expl = "";
     g_settings[SETTING_KEEPBLASTSTATE].type = SETTING_BOOL;
-    g_settings[SETTING_KEEPBLASTSTATE].f_init = Keepblaststate_Init;
     g_settings[SETTING_KEEPBLASTSTATE].f_start = Keepblaststate_Start;
     g_settings[SETTING_KEEPBLASTSTATE].f_stop = Keepblaststate_Stop;
     g_settings[SETTING_KEEPBLASTSTATE].f_active = SettingActiveDefaultBool;
@@ -3138,11 +3137,6 @@ _keepblaststate
 
 
 
-
-bool Keepblaststate_Init()
-{
-    return true;
-}
 
 bool Keepblaststate_Start()
 {
