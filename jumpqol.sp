@@ -9,7 +9,7 @@ public Plugin myinfo =
     name = "JumpQoL",
     author = "ILDPRUT",
     description = "Adds various improvements to jumping.",
-    version = "1.0.6",
+    version = "1.0.7",
 }
 
 #define DEBUG 0
@@ -2443,6 +2443,7 @@ _required
 
 
 
+ConVar g_Required_ConVar_maxevents;
 Handle g_Required_Call_CBaseFilter__PassesFilter;
 bool Required_Init()
 {
@@ -2459,6 +2460,15 @@ bool Required_Init()
 
     if (!g_detours[DETOUR_SERVICEEVENTS].Enable(Required_Detour_Pre_CEventQueue__ServiceEvents, _))
         return false;
+
+    g_Required_ConVar_maxevents = CreateConVar(
+        "sm_jumpqol_required_maxevents",
+        "-1",
+        "Max amount of game events that should be checked in a single frame to support gimmicks.\n-1:No max.\n0:Disable checks.\n1 or above: Max amount.",
+        _,
+        true,
+        -1.0
+    );
 
     if (!g_detours[DETOUR_ITEMPOSTFRAME].Enable(Required_Detour_Pre_CTFWeaponBase__ItemPostFrame, Required_Detour_Post_CTFWeaponBase__ItemPostFrame))
         return false;
@@ -2672,6 +2682,10 @@ methodmap EventQueueEvent
 
 MRESReturn Required_Detour_Pre_CEventQueue__ServiceEvents(Address pThis)
 {
+    int maxevents = g_Required_ConVar_maxevents.IntValue;
+    if (maxevents == 0)
+        return MRES_Ignored;
+
     int num = 0;
     char targets[MAXPLAYERS*MAX_PROJECTILES][256];
     int lengths[MAXPLAYERS*MAX_PROJECTILES];
@@ -2694,6 +2708,8 @@ MRESReturn Required_Detour_Pre_CEventQueue__ServiceEvents(Address pThis)
         firetimes[num] = RoundToCeil(event.m_flFireTime / g_globals.interval_per_tick);
 
         num++;
+        if (maxevents != -1 && num >= maxevents)
+            break;
 
         event = event.m_pNext;
     }
