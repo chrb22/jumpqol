@@ -9,7 +9,7 @@ public Plugin myinfo =
     name = "JumpQoL",
     author = "ILDPRUT",
     description = "Adds various improvements to jumping.",
-    version = "1.0.7",
+    version = "1.0.8",
 }
 
 #define DEBUG 0
@@ -3926,8 +3926,13 @@ void Sync_OnPlayerRunCmdPost(int client)
 
         SDKCall(g_Call_Physics_SimulateEntity, entity);
 
-        if (IsValidEdict(entity))
+        if (IsValidEdict(entity)) {
+            // Don't simulate entity twice if sync turns off on the first frame
+            if (m_nSimulationTick == -1)
+                m_nSimulationTick = g_tickcount_frame - 1;
+
             SetEntData(entity, m_nSimulationTick_offset, m_nSimulationTick + 1);
+        }
     }
 
     g_allow_update = false;
