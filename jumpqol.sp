@@ -3,13 +3,16 @@
 
 #include <sourcemod>
 #include <dhooks>
+#undef REQUIRE_EXTENSIONS
+#include <sendvaredit>
+#define REQUIRE_EXTENSIONS
 
 public Plugin myinfo =
 {
     name = "JumpQoL",
     author = "ILDPRUT",
     description = "Adds various improvements to jumping.",
-    version = "1.0.9",
+    version = "1.1.0",
 }
 
 #define DEBUG 0
@@ -424,21 +427,6 @@ int LoadFromStringAddress(Address cstring, char[] string)
 
 
 
-int g_offset_m_pServerClass;
-SendProp GetSendProp(int entity, int index)
-{
-    Address m_Network = GetEntityAddress(entity) + view_as<Address>(20);
-    Address m_pServerClass = view_as<Address>(LoadFromAddress(m_Network + view_as<Address>(g_offset_m_pServerClass), NumberType_Int32));
-    Address m_pTable = view_as<Address>(LoadFromAddress(m_pServerClass + view_as<Address>(4), NumberType_Int32));
-    Address m_pPrecalc = view_as<Address>(LoadFromAddress(m_pTable + view_as<Address>(12), NumberType_Int32));
-    Address props = view_as<Address>(LoadFromAddress(m_pPrecalc + view_as<Address>(44), NumberType_Int32));
-    return SendProp(LoadFromAddress(props + view_as<Address>(4*index), NumberType_Int32));
-}
-
-
-
-
-
 ConVar g_ConVar_sv_gravity = view_as<ConVar>(INVALID_HANDLE);
 float GetGravity(int client)
 {
@@ -482,6 +470,12 @@ bool SetError(const char[] error)
 
 
 Handle g_gameconf;
+
+
+
+
+
+bool g_sendvaredit_loaded = false;
 
 
 
@@ -594,9 +588,6 @@ enum
     DETOUR_CLIENT_ITEMBUSYFRAME,
     DETOUR_SETGROUNDENTITY,
     DETOUR_CM_CLIPBOXTOBRUSH,
-    DETOUR_SENDCLIENTMESSAGES,
-    DETOUR_SV_COMPUTECLIENTPACKS,
-    DETOUR_SENDSNAPSHOT,
     NUM_DETOURS,
 };
 Detour g_detours[NUM_DETOURS];
@@ -759,6 +750,36 @@ enum struct Setting
             this.convar_enforce.SetString(string_value);
             this.convar_enforce.AddChangeHook(ConVarChanged_Setting_Enforce);
         }
+
+        return true;
+    }
+
+    void Fail()
+    {
+        if (this.numusing > 0) {
+            Call_StartFunction(INVALID_HANDLE, this.f_stop);
+            Call_Finish();
+        }
+
+        this.working = false;
+        this.numusing = 0;
+
+        bool setting_default = this.GetDefault();
+        for (int client = 1; client <= MAXPLAYERS; client++) {
+            this.active[client] = false;
+            this.values[client] = setting_default;
+            this.prefs[client] = setting_default;
+        }
+    }
+
+    bool Restart()
+    {
+        if (!this.Init(this.GetDefault(), this.IsEnforced()))
+            return false;
+
+        for (int client = 1; client <= MaxClients; client++)
+            if (IsClientInGame(client) && !IsFakeClient(client))
+                this.ChangeValue(client, this.prefs[client]);
 
         return true;
     }
@@ -1114,6 +1135,7 @@ _projectile
 
 
 
+
 int GetOwner(int entity)
 {
     int owner = GetEntPropEnt(entity, Prop_Data, "m_hOwnerEntity");
@@ -1128,22 +1150,6 @@ int GetOwner(int entity)
 
 
 
-
-enum struct SendPropInfo
-{
-    SendProp prop;
-
-    int bit;
-}
-
-enum struct ProjectileMessage
-{
-    // No enum struct arrays inside enum structs :(
-    SendPropInfo pos;
-    SendPropInfo rot;
-    SendPropInfo vel;
-    SendPropInfo angvel;
-}
 
 enum struct ProjectileState
 {
@@ -1182,8 +1188,6 @@ enum struct Projectile
     int ref;
 
     MoveType movetype;
-
-    ProjectileMessage message;
 
     bool updated;
 
@@ -1228,44 +1232,6 @@ enum struct Projectile
         this.ref = ref;
         this.movetype = view_as<MoveType>(GetEntProp(entity, Prop_Data, "m_MoveType"));
         this.frame_manipulated = 0;
-
-        int total = 0;
-        total += view_as<int>(HasEntProp(entity, Prop_Send, "m_vecOrigin"));
-        total += view_as<int>(HasEntProp(entity, Prop_Send, "m_angRotation"));
-        total += view_as<int>(HasEntProp(entity, Prop_Send, "m_vecVelocity"));
-        total += view_as<int>(HasEntProp(entity, Prop_Send, "m_vecAngVelocity"));
-
-        SendPropInfo info;
-        info.prop = SendProp(Address_Null);
-        info.bit = -1;
-
-        this.message.pos = info;
-        this.message.rot = info;
-        this.message.vel = info;
-        this.message.vel = info;
-
-        int i = 0;
-        int count = 0;
-        while (count < total) {
-            SendProp prop = GetSendProp(entity, i);
-
-            bool match = true;
-            if (prop.offset == FindDataMapInfo(0, "m_vecOrigin"))
-                this.message.pos.prop = prop;
-            else if (prop.offset == FindDataMapInfo(0, "m_angRotation"))
-                this.message.rot.prop = prop;
-            else if (prop.offset == FindDataMapInfo(0, "m_vecVelocity"))
-                this.message.vel.prop = prop;
-            else if (prop.offset == FindDataMapInfo(0, "m_vecAngVelocity"))
-                this.message.angvel.prop = prop;
-            else
-                match = false;
-
-            if (match)
-                count++;
-
-            i++;
-        }
     }
 
     void Activate()
@@ -1444,6 +1410,7 @@ _session
      ██ ██           ██      ██ ██ ██    ██ ██  ██ ██
 ███████ ███████ ███████ ███████ ██  ██████  ██   ████
 */
+
 
 
 
@@ -1823,6 +1790,8 @@ public void OnPluginStart()
     if (!g_gameconf)
         SetFailState("[jumpqol.smx] Unable to start plugin: Failed to load gameconf jumpqol.txt.");
 
+    g_sendvaredit_loaded = LibraryExists("sendvaredit");
+
     // Detours
     g_detours[DETOUR_PHYSICS_SIMULATEENTITY].Init(
         "Physics_SimulateEntity",
@@ -1883,21 +1852,6 @@ public void OnPluginStart()
         "CM_ClipBoxToBrush<false>",
         CallConv_CDECL, ReturnType_Void, ThisPointer_Ignore,
         {HookParamType_ObjectPtr, HookParamType_ObjectPtr, HookParamType_Unknown}
-    );
-    g_detours[DETOUR_SENDCLIENTMESSAGES].Init(
-        "CGameServer::SendClientMessages",
-        CallConv_THISCALL, ReturnType_Void, ThisPointer_Address,
-        {HookParamType_Bool, HookParamType_Unknown}
-    );
-    g_detours[DETOUR_SV_COMPUTECLIENTPACKS].Init(
-        "SV_ComputeClientPacks",
-        CallConv_CDECL, ReturnType_Void, ThisPointer_Ignore,
-        {HookParamType_Int, HookParamType_Int, HookParamType_ObjectPtr, HookParamType_Unknown}
-    );
-    g_detours[DETOUR_SENDSNAPSHOT].Init(
-        "CGameClient::SendSnapshot",
-        CallConv_THISCALL, ReturnType_Void, ThisPointer_Address,
-        {HookParamType_ObjectPtr, HookParamType_Unknown}
     );
 
     // Required
@@ -2040,8 +1994,6 @@ public void OnPluginStart()
     g_settings[SETTING_FAKEDELAY].expl = "-1: Disable.\n0 or above: Delay to fake in ms.";
     g_settings[SETTING_FAKEDELAY].type = SETTING_INT;
     g_settings[SETTING_FAKEDELAY].f_init = Fakedelay_Init;
-    g_settings[SETTING_FAKEDELAY].f_start = Fakedelay_Start;
-    g_settings[SETTING_FAKEDELAY].f_stop = Fakedelay_Stop;
     g_settings[SETTING_FAKEDELAY].f_active = SettingActiveDefaultIntGE;
     g_settings[SETTING_FAKEDELAY].range[0] = -1.0;
     g_settings[SETTING_FAKEDELAY].range[1] = NUM_PREDICTIONS*(g_globals.interval_per_tick*1000.0);
@@ -2068,6 +2020,32 @@ public void OnPluginStart()
     #if DEBUG
     RegConsoleCmd("sm_jumpqol_debug", Command_Debug);
     #endif
+}
+
+public void OnLibraryAdded(const char[] name)
+{
+    if (StrEqual(name, "sendvaredit")) {
+        g_sendvaredit_loaded = true;
+
+        if (!g_settings[SETTING_SYNC].working)
+            g_settings[SETTING_SYNC].Restart();
+
+        if (!g_settings[SETTING_FAKEDELAY].working)
+            g_settings[SETTING_FAKEDELAY].Restart();
+    }
+}
+
+public void OnLibraryRemoved(const char[] name)
+{
+    if (StrEqual(name, "sendvaredit")) {
+        g_sendvaredit_loaded = false;
+
+        if (g_settings[SETTING_SYNC].working)
+            g_settings[SETTING_SYNC].Fail();
+
+        if (g_settings[SETTING_FAKEDELAY].working)
+            g_settings[SETTING_FAKEDELAY].Fail();
+    }
 }
 
 
@@ -2468,10 +2446,6 @@ bool Required_Init()
     if (!g_globals)
         return SetError("Failed to find gpGlobals.");
 
-    g_offset_m_pServerClass = GameConfGetOffset(g_gameconf, "CServerNetworkProperty::m_pServerClass");
-    if (g_offset_m_pServerClass == -1)
-        return SetError("Failed to get CServerNetworkProperty::m_pServerClass offset.");
-
     if (!g_detours[DETOUR_PHYSICS_SIMULATEENTITY].Enable(Required_Detour_Pre_Physics_SimulateEntity, Required_Detour_Post_Physics_SimulateEntity))
         return false;
 
@@ -2806,6 +2780,15 @@ public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float
     for (int i = 0; i < g_numnewprojs[client]; i++)
         g_sessions[client].AddProjectile(g_newprojs[client][i]);
     g_numnewprojs[client] = 0;
+}
+
+public void OnSendClientMessages()
+{
+    if (g_settings[SETTING_SYNC].numusing != 0)
+        Sync_OnSendClientMessages();
+
+    if (g_settings[SETTING_FAKEDELAY].numusing != 0)
+        Fakedelay_OnSendClientMessages();
 }
 
 
@@ -3954,6 +3937,9 @@ IPredictionSystem g_sync_te;
 Address g_sync_movehelper;
 bool Sync_Init()
 {
+    if (!g_sendvaredit_loaded)
+        return SetError("Extension SendVarEdit is not present.");
+
     StartPrepSDKCall(SDKCall_Static);
     if (!PrepSDKCall_SetFromConf(g_gameconf, SDKConf_Signature, "Physics_SimulateEntity"))
         return SetError("Failed to prepare Physics_SimulateEntity call.");
@@ -3980,9 +3966,6 @@ bool Sync_Start()
     if (!g_detours[DETOUR_PHYSICS_SIMULATEENTITY].Enable(Sync_Detour_Pre_Physics_SimulateEntity, _))
         return false;
 
-    if (!g_detours[DETOUR_SENDCLIENTMESSAGES].Enable(Sync_Detour_Pre_CGameServer__SendClientMessages, Sync_Detour_Post_CGameServer__SendClientMessages))
-        return false;
-
     if (!g_detours[DETOUR_UTIL_DECALTRACE].Enable(Sync_Detour_Pre_UTIL_DecalTrace, Sync_Detour_Post_UTIL_DecalTrace))
         return false;
 
@@ -3992,8 +3975,6 @@ bool Sync_Start()
 void Sync_Stop()
 {
     g_detours[DETOUR_PHYSICS_SIMULATEENTITY].Disable(Sync_Detour_Pre_Physics_SimulateEntity, _);
-
-    g_detours[DETOUR_SENDCLIENTMESSAGES].Disable(Sync_Detour_Pre_CGameServer__SendClientMessages, Sync_Detour_Post_CGameServer__SendClientMessages);
 
     g_detours[DETOUR_UTIL_DECALTRACE].Disable(Sync_Detour_Pre_UTIL_DecalTrace, Sync_Detour_Post_UTIL_DecalTrace);
 }
@@ -4083,7 +4064,7 @@ MRESReturn Sync_Detour_Pre_Physics_SimulateEntity(DHookParam hParams)
     return MRES_Ignored;
 }
 
-MRESReturn Sync_Detour_Pre_CGameServer__SendClientMessages(Address pThis, DHookParam hParams)
+void Sync_OnSendClientMessages()
 {
     for (int client = 1; client <= MaxClients; client++) {
         if (!IsActivePlayer(client))
@@ -4100,37 +4081,44 @@ MRESReturn Sync_Detour_Pre_CGameServer__SendClientMessages(Address pThis, DHookP
             if (!g_projs[client][i].IsPredictable())
                 continue;
 
-            SetEntPropFloat(entity, Prop_Data, "m_flSimulationTime", g_curtime_frame); // Marks entity as updated for the current frame
-            g_projs[client][i].GetState(g_tickcount_frame).WriteTo(entity);
+            // Implementation of SendProxy_SimulationTime
+            int addt = 0;
+            {
+                int ticknumber = g_tickcount_frame;
+
+                int mod = entity % 32;
+                int tickbase = 100 * ((g_tickcount_frame - mod) / 100);
+
+                if (ticknumber >= tickbase)
+                    addt = (ticknumber - tickbase) & 0xff;
+            }
+
+            // Marks entity as updated for the current frame for clients
+            SetSendVar(entity, -1, "m_flSimulationTime", SendVarInt(addt), 1);
+
+            ProjectileState state;
+            state = g_projs[client][i].GetState(g_tickcount_frame);
+
+            ProjectileState state_prev;
+            state_prev = g_projs[client][i].GetState(g_tickcount_frame - 1);
+
+            if (HasNetworkableProp(entity, "m_vecOrigin"))
+                if (!CompareVectors(state.pos, state_prev.pos))
+                    SetSendVar(entity, -1, "m_vecOrigin", SendVarVector(state.pos), 1);
+
+            if (HasNetworkableProp(entity, "m_angRotation"))
+                if (!CompareVectors(state.rot, state_prev.rot))
+                    SetSendVar(entity, -1, "m_angRotation", SendVarVector(state.rot, true), 1);
+
+            if (HasNetworkableProp(entity, "m_vecVelocity"))
+                if (!CompareVectors(state.vel, state_prev.vel))
+                    SetSendVar(entity, -1, "m_vecVelocity", SendVarVector(state.vel), 1);
+
+            if (HasNetworkableProp(entity, "m_vecAngVelocity"))
+                if (!CompareVectors(state.angvel, state_prev.angvel))
+                    SetSendVar(entity, -1, "m_vecAngVelocity", SendVarVector(state.angvel, true), 1);
         }
     }
-
-    return MRES_Ignored;
-}
-
-MRESReturn Sync_Detour_Post_CGameServer__SendClientMessages(Address pThis, DHookParam hParams)
-{
-    for (int client = 1; client <= MaxClients; client++) {
-        if (!IsActivePlayer(client))
-            continue;
-
-        if (!g_sessions[client].sync)
-            continue;
-
-        for (int i = 0; i < g_numprojs[client]; i++) {
-            int entity = g_projs[client][i].Entity();
-            if (entity == -1)
-                continue;
-
-            if (!g_projs[client][i].IsPredictable())
-                continue;
-
-            int frame = g_projs[client][i].frame;
-            g_projs[client][i].GetState(frame).WriteTo(entity);
-        }
-    }
-
-    return MRES_Ignored;
 }
 
 Address g_sync_suppresshost = Address_Null;
@@ -4177,448 +4165,15 @@ _fakedelay
 
 
 
-// From coordsize.h
-#define COORD_INTEGER_BITS          14
-#define COORD_FRACTIONAL_BITS       5
-#define COORD_DENOMINATOR           (1<<(COORD_FRACTIONAL_BITS))
-#define COORD_RESOLUTION            (1.0/(COORD_DENOMINATOR))
-
-#define COORD_INTEGER_BITS_MP       11
-#define COORD_FRACTIONAL_BITS_MP_LOWPRECISION 3
-#define COORD_DENOMINATOR_LOWPRECISION          (1<<(COORD_FRACTIONAL_BITS_MP_LOWPRECISION))
-#define COORD_RESOLUTION_LOWPRECISION           (1.0/(COORD_DENOMINATOR_LOWPRECISION))
-
-#define NORMAL_FRACTIONAL_BITS      11
-#define NORMAL_DENOMINATOR          ( (1<<(NORMAL_FRACTIONAL_BITS)) - 1 )
-#define NORMAL_RESOLUTION           (1.0/(NORMAL_DENOMINATOR))
-
-// From dt_common.h
-#define SPROP_UNSIGNED                  (1<<0)
-#define SPROP_COORD                     (1<<1)
-#define SPROP_NOSCALE                   (1<<2)
-#define SPROP_ROUNDDOWN                 (1<<3)
-#define SPROP_ROUNDUP                   (1<<4)
-#define SPROP_NORMAL                    (1<<5)
-#define SPROP_EXCLUDE                   (1<<6)
-#define SPROP_XYZE                      (1<<7)
-#define SPROP_INSIDEARRAY               (1<<8)
-#define SPROP_PROXY_ALWAYS_YES          (1<<9)
-#define SPROP_CHANGES_OFTEN             (1<<10)
-#define SPROP_IS_A_VECTOR_ELEM          (1<<11)
-#define SPROP_COLLAPSIBLE               (1<<12)
-#define SPROP_COORD_MP                  (1<<13)
-#define SPROP_COORD_MP_LOWPRECISION     (1<<14)
-#define SPROP_COORD_MP_INTEGRAL         (1<<15)
-
-bool UseRealCoordMP(SendProp prop)
-{
-    return prop.flags & (SPROP_COORD_MP | SPROP_COORD_MP_LOWPRECISION | SPROP_COORD_MP_INTEGRAL) ? false : true;
-}
-
-methodmap BitBuffer
-{
-    public BitBuffer(Address address)
-    {
-        return view_as<BitBuffer>(address);
-    }
-
-    // From bf_read::ReadUBitLong
-    public int Read(int bit, int numbits)
-    {
-        int iStartBit = bit & 31;
-        int iLastBit = bit + numbits - 1;
-        int iWordOffset1 = bit >>> 5;
-        int iWordOffset2 = iLastBit >>> 5;
-
-        int bitmask = (2 << (numbits - 1)) - 1;
-
-        Address dw1_address = view_as<Address>(this) + view_as<Address>(iWordOffset1*4);
-        Address dw2_address = view_as<Address>(this) + view_as<Address>(iWordOffset2*4);
-
-        int dw1 = LoadFromAddress(dw1_address, NumberType_Int32) >>> iStartBit;
-        int dw2 = LoadFromAddress(dw2_address, NumberType_Int32) << (32 - iStartBit);
-
-        return (dw1 | dw2) & bitmask;
-    }
-
-    // From bf_write::WriteUBitLong
-    public int Write(int bit, int value, int numbits)
-    {
-        int iCurBitMasked = bit & 31;
-        int iDWord = bit >>> 5;
-
-        value = (value << iCurBitMasked) | (value >>> (32 - iCurBitMasked));
-
-        int temp = 1 << (numbits-1);
-        int mask1 = (temp*2-1) << iCurBitMasked;
-        int mask2 = (temp-1) >>> (31 - iCurBitMasked);
-
-        int i = mask2 & 1;
-        Address dword1_address = view_as<Address>(this) + view_as<Address>((iDWord + 0)*4);
-        Address dword2_address = view_as<Address>(this) + view_as<Address>((iDWord + i)*4);
-
-        int dword1 = LoadFromAddress( dword1_address, NumberType_Int32);
-        int dword2 = LoadFromAddress( dword2_address, NumberType_Int32);
-
-        dword1 ^= ( mask1 & ( value ^ dword1 ) );
-        dword2 ^= ( mask2 & ( value ^ dword2 ) );
-
-        StoreToAddress(dword2_address, dword2, NumberType_Int32, false);
-        StoreToAddress(dword1_address, dword1, NumberType_Int32, false);
-
-        return numbits;
-    }
-
-    // Mostly taken from bitbuf.cpp
-    public int WriteFloat(int bit, float value, int flags, bool realcoordmp = false, int numbits = -1)
-    {
-        int start = bit;
-
-        bool lowprecision = ((flags & SPROP_COORD_MP_LOWPRECISION) != 0);
-
-        int signbit = (value <= -(lowprecision ? COORD_RESOLUTION_LOWPRECISION : COORD_RESOLUTION));
-        int intval = RoundToFloor(FloatAbs(value));
-        int fractval = lowprecision ?
-                            RoundToFloor(FloatAbs(value * COORD_DENOMINATOR_LOWPRECISION)) & (COORD_DENOMINATOR_LOWPRECISION-1) :
-                            RoundToFloor(FloatAbs(value * COORD_DENOMINATOR)) & (COORD_DENOMINATOR-1);
-        int inbounds = (intval < (1 << COORD_INTEGER_BITS_MP));
-
-        if (flags & SPROP_COORD) {
-            bit += this.Write(bit, intval != 0, 1);
-            bit += this.Write(bit, fractval != 0, 1);
-
-            if (intval != 0 || fractval != 0) {
-                bit += this.Write(bit, signbit != 0, 1);
-
-                if (intval != 0) {
-                    intval--;
-                    bit += this.Write(bit, intval, COORD_INTEGER_BITS);
-                }
-
-                if (fractval != 0) {
-                    bit += this.Write(bit, fractval, COORD_FRACTIONAL_BITS);
-                }
-            }
-        }
-        else if (flags & (SPROP_COORD_MP | SPROP_COORD_MP_LOWPRECISION | SPROP_COORD_MP_INTEGRAL)) {
-            int bits = 0;
-            numbits = 0;
-
-            // We want to always use COORD_INTEGER_BITS bits (reserved by using 2048.0 in Fakedelay_Detour_Pre_SV_ComputeClientPacks)
-            if (!realcoordmp) {
-                inbounds = false;
-                if (intval == 0)
-                    intval = 1;
-            }
-
-            if (flags & SPROP_COORD_MP_INTEGRAL) {
-                if (intval != 0) {
-                    intval--;
-                    bits = intval * 8 + signbit * 4 + 2 + inbounds;
-                    numbits = 3 + (inbounds ? COORD_INTEGER_BITS_MP : COORD_INTEGER_BITS);
-                }
-                else {
-                    bits = inbounds;
-                    numbits = 2;
-                }
-            }
-            else {
-                if (intval != 0) {
-                    intval--;
-                    bits = intval * 8 + signbit * 4 + 2 + inbounds;
-                    bits += inbounds ? (fractval << (3+COORD_INTEGER_BITS_MP)) : (fractval << (3+COORD_INTEGER_BITS));
-                    numbits = 3 + (inbounds ? COORD_INTEGER_BITS_MP : COORD_INTEGER_BITS)
-                                + (lowprecision ? COORD_FRACTIONAL_BITS_MP_LOWPRECISION : COORD_FRACTIONAL_BITS);
-                }
-                else {
-                    bits = fractval * 8 + signbit * 4 + 0 + inbounds;
-                    numbits = 3 + (lowprecision ? COORD_FRACTIONAL_BITS_MP_LOWPRECISION : COORD_FRACTIONAL_BITS);
-                }
-            }
-
-            bit += this.Write(bit, bits, numbits);
-        }
-        else if (flags & SPROP_NORMAL) {
-            signbit = (value <= -NORMAL_RESOLUTION);
-            fractval = RoundToFloor(FloatAbs(value * NORMAL_DENOMINATOR));
-
-            if (fractval > NORMAL_DENOMINATOR)
-                fractval = NORMAL_DENOMINATOR;
-
-            bit += this.Write(bit, signbit, 1);
-            bit += this.Write(bit, fractval, NORMAL_FRACTIONAL_BITS);
-        }
-        else if (flags & SPROP_NOSCALE) {
-            bit += this.Write(bit, view_as<int>(value), 32);
-        }
-        else {
-            if (numbits == -1)
-                SetFailState("Need to properly pass ranged floats.");
-
-            bit += this.Write(bit, RoundFloat(value), numbits);
-        }
-
-        return bit - start;
-    }
-
-    public int WritePropFloat(SendPropInfo info, int bit, float value)
-    {
-        int numbits = -1;
-        if (info.prop.flags & (SPROP_COORD | SPROP_COORD_MP | SPROP_COORD_MP_LOWPRECISION | SPROP_COORD_MP_INTEGRAL | SPROP_NORMAL | SPROP_NOSCALE) == 0) {
-            value = (value - info.prop.lowvalue) * info.prop.highlowmul;
-            numbits = info.prop.numbits;
-        }
-
-        return this.WriteFloat(bit, value, info.prop.flags, UseRealCoordMP(info.prop), numbits);
-    }
-
-    public int WritePropVector(SendPropInfo info, int bit, float vector[3])
-    {
-        int start = bit;
-
-        bit += this.WritePropFloat(info, bit, vector[0]);
-        bit += this.WritePropFloat(info, bit, vector[1]);
-        if (info.prop.flags & SPROP_NORMAL == 0)
-            bit += this.WritePropFloat(info, bit, vector[2]);
-        else
-            bit += this.Write(bit, view_as<int>(vector[2] <= -NORMAL_RESOLUTION), 1);
-
-        return bit - start;
-    }
-}
-
-methodmap PackedEntity
-{
-    property int entity
-    {
-        public get()
-        {
-            return view_as<int>( LoadFromAddress(view_as<Address>(this) + view_as<Address>(8), NumberType_Int32) );
-        }
-    }
-
-    property BitBuffer data
-    {
-        public get()
-        {
-            return view_as<BitBuffer>( LoadFromAddress(view_as<Address>(this) + view_as<Address>(36), NumberType_Int32) );
-        }
-    }
-
-    property int numbits
-    {
-        public get()
-        {
-            return view_as<int>( LoadFromAddress(view_as<Address>(this) + view_as<Address>(40), NumberType_Int32) );
-        }
-    }
-};
-
-methodmap PackedEntityPointerArray
-{
-    public PackedEntityPointerArray(Address address)
-    {
-        return view_as<PackedEntityPointerArray>(address);
-    }
-
-    public PackedEntity Get(int index)
-    {
-        return view_as<PackedEntity>( LoadFromAddress(view_as<Address>(this) + view_as<Address>(4*index), NumberType_Int32) );
-    }
-}
-
-methodmap CFrameSnapshotManager
-{
-    property PackedEntityPointerArray packeddata
-    {
-        public get()
-        {
-            return view_as<PackedEntityPointerArray>( view_as<Address>(this) + view_as<Address>(104) );
-        }
-    }
-};
-CFrameSnapshotManager g_framesnapshotmanager;
-
-
-
-
-
-enum struct bf_read
-{
-    BitBuffer m_pData;
-    int m_nDataBytes;
-    int m_nDataBits;
-    int m_iCurBit;
-    int overflow;
-    Address m_pDebugName;
-}
-
-// Looks through SendProps of a packed entity like SendTable_CalcDelta does
-Handle g_Call_SkipProp[7];
-bool FindProjectileBitOffsets(int client, int index)
-{
-    int entity = g_projs[client][index].Entity();
-
-    PackedEntity packed = g_framesnapshotmanager.packeddata.Get(entity);
-    if (packed == view_as<PackedEntity>(Address_Null))
-        return false;
-
-    BitBuffer buffer = packed.data;
-    int numbits = packed.numbits;
-
-    bf_read read;
-    read.m_pData = buffer;
-    read.m_nDataBytes = RoundToCeil(float(numbits) / 8.0);
-    read.m_nDataBits = numbits;
-    read.m_iCurBit = 0;
-    read.overflow = 0;
-    read.m_pDebugName = Address_Null;
-
-    int total = 0;
-    total += view_as<int>(!!g_projs[client][index].message.pos.prop);
-    total += view_as<int>(!!g_projs[client][index].message.rot.prop);
-    total += view_as<int>(!!g_projs[client][index].message.vel.prop);
-    total += view_as<int>(!!g_projs[client][index].message.angvel.prop);
-
-    int i = -1;
-    SendProp prop;
-
-    int count = 0;
-    while (count < total && read.m_nDataBits - read.m_iCurBit >= 7) {
-        int bit = read.m_pData.Read(read.m_iCurBit, 1);
-        read.m_iCurBit += 1;
-
-        if (bit == 0)
-            break;
-
-        // bf_read::ReadUBitVar
-        int bits = read.m_pData.Read(read.m_iCurBit, 6);
-        read.m_iCurBit += 6;
-
-        int delta = bits >>> 2;
-        if (bits & 3) {
-            int numarr[4] = {4, 8, 12, 32};
-            numbits = numarr[bits & 3];
-
-            read.m_iCurBit -= 4;
-
-            delta = read.m_pData.Read(read.m_iCurBit, numbits);
-            read.m_iCurBit += numbits;
-        }
-
-        i += 1 + delta;
-
-        prop = GetSendProp(entity, i);
-
-        bool match = true;
-        if (prop == g_projs[client][index].message.pos.prop)
-            g_projs[client][index].message.pos.bit = read.m_iCurBit;
-        else if (prop == g_projs[client][index].message.rot.prop)
-            g_projs[client][index].message.rot.bit = read.m_iCurBit;
-        else if (prop == g_projs[client][index].message.vel.prop)
-            g_projs[client][index].message.vel.bit = read.m_iCurBit;
-        else if (prop == g_projs[client][index].message.angvel.prop)
-            g_projs[client][index].message.angvel.bit = read.m_iCurBit;
-        else
-            match = false;
-
-        if (match)
-            count++;
-
-        SDKCall(g_Call_SkipProp[prop.type], prop, read);
-    }
-
-    return true;
-}
-
-
-
-
-
 bool Fakedelay_Init()
 {
-    ConVar sv_parallel_sendsnapshot = FindConVar("sv_parallel_sendsnapshot");
-    HookConVarChange(sv_parallel_sendsnapshot, Fakedelay_Hook_sv_parallel_sendsnapshot);
-
-    if (sv_parallel_sendsnapshot.BoolValue == true)
-        return SetError("ConVar sv_parallel_sendsnapshot must be set to 0.");
-
-    g_framesnapshotmanager = view_as<CFrameSnapshotManager>(GameConfGetAddress(g_gameconf, "framesnapshotmanager"));
-    if (!g_framesnapshotmanager)
-        return SetError("Failed to find framesnapshotmanager.");
-
-    Address proptypefns = GameConfGetAddress(g_gameconf, "&g_PropTypeFns");
-    if (!proptypefns)
-        return SetError("Failed to find &g_PropTypeFns.");
-
-    // CALL SkipProp
-    for (int type = 0; type < 7; type++) {
-        Address address = LoadFromAddress(proptypefns + view_as<Address>(36*type) + view_as<Address>(32), NumberType_Int32);
-
-        if (!address)
-            continue;
-
-        StartPrepSDKCall(SDKCall_Static);
-        if (!PrepSDKCall_SetAddress(address))
-            return SetError("Failed to prepare SkipProp call.");
-
-        PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
-        PrepSDKCall_AddParameter(SDKType_String, SDKPass_Pointer);
-
-        g_Call_SkipProp[type] = EndPrepSDKCall();
-        if (g_Call_SkipProp[type] == INVALID_HANDLE)
-            return SetError("Failed to prepare SkipProp call.");
-    }
+    if (!g_sendvaredit_loaded)
+        return SetError("Extension SendVarEdit is not present.");
 
     return true;
 }
 
-bool Fakedelay_Start()
-{
-    if (!g_detours[DETOUR_SV_COMPUTECLIENTPACKS].Enable(Fakedelay_Detour_Pre_SV_ComputeClientPacks, Fakedelay_Detour_Post_SV_ComputeClientPacks))
-        return false;
-
-    if (!g_detours[DETOUR_SENDSNAPSHOT].Enable(Fakedelay_Detour_Pre_CGameClient__SendSnapshot, Fakedelay_Detour_Post_CGameClient__SendSnapshot))
-        return false;
-
-    return true;
-}
-
-void Fakedelay_Stop()
-{
-    g_detours[DETOUR_SV_COMPUTECLIENTPACKS].Disable(Fakedelay_Detour_Pre_SV_ComputeClientPacks, Fakedelay_Detour_Post_SV_ComputeClientPacks);
-
-    g_detours[DETOUR_SENDSNAPSHOT].Disable(Fakedelay_Detour_Pre_CGameClient__SendSnapshot, Fakedelay_Detour_Post_CGameClient__SendSnapshot);
-}
-
-void Fakedelay_Hook_sv_parallel_sendsnapshot(ConVar convar, const char[] value_old, const char[] value_new)
-{
-    if (convar.BoolValue && g_settings[SETTING_FAKEDELAY].working)
-    {
-        if (g_settings[SETTING_FAKEDELAY].numusing > 0)
-            Fakedelay_Stop();
-
-        g_settings[SETTING_FAKEDELAY].working = false;
-        g_settings[SETTING_FAKEDELAY].numusing = 0;
-
-        bool setting_default = g_settings[SETTING_FAKEDELAY].GetDefault();
-        for (int client = 1; client <= MAXPLAYERS; client++) {
-            g_settings[SETTING_FAKEDELAY].active[client] = false;
-            g_settings[SETTING_FAKEDELAY].values[client] = setting_default;
-            g_settings[SETTING_FAKEDELAY].prefs[client] = setting_default;
-        }
-    }
-    else {
-        UnhookConVarChange(convar, Fakedelay_Hook_sv_parallel_sendsnapshot);
-        g_settings[SETTING_FAKEDELAY].Init(-1, false);
-    }
-}
-
-float g_fillpos[MAXPLAYERS+1][MAX_PROJECTILES][3];
-float g_fillrot[MAXPLAYERS+1][MAX_PROJECTILES][3];
-float g_fillvel[MAXPLAYERS+1][MAX_PROJECTILES][3];
-float g_fillangvel[MAXPLAYERS+1][MAX_PROJECTILES][3];
-MRESReturn Fakedelay_Detour_Pre_SV_ComputeClientPacks(DHookParam hParams)
+void Fakedelay_OnSendClientMessages()
 {
     for (int client = 1; client <= MaxClients; client++) {
         if (!IsActivePlayer(client))
@@ -4635,217 +4190,29 @@ MRESReturn Fakedelay_Detour_Pre_SV_ComputeClientPacks(DHookParam hParams)
             if (!g_projs[client][i].IsPredictable())
                 continue;
 
-            g_projs[client][i].message.pos.bit = -1;
-            g_projs[client][i].message.rot.bit = -1;
-            g_projs[client][i].message.vel.bit = -1;
-            g_projs[client][i].message.angvel.bit = -1;
+            int frame = g_tickcount_frame + g_projs[client][i].clientdelay - RoundToCeil(g_sessions[client].fakedelay / 1000.0 / g_globals.interval_per_tick);
 
-            SendProp prop;
+            ProjectileState state;
+            state = g_projs[client][i].GetState(frame);
 
-            // Force vectors with SPROP_COORD_MP_INTEGRAL flag to always be 17*3 bits long to have enough space by using a |value| >= 2^COORD_INTEGER_BITS_MP
-            prop = g_projs[client][i].message.pos.prop;
-            if (prop && !UseRealCoordMP(prop)) {
-                GetEntDataVector(entity, prop.offset, g_fillpos[client][i]);
-                SetEntDataVector(entity, prop.offset, {2048.0, 2048.0, 2048.0}, true);
-            }
+            ProjectileState state_prev;
+            state_prev = g_projs[client][i].GetState(frame - 1);
 
-            prop = g_projs[client][i].message.rot.prop;
-            if (prop && !UseRealCoordMP(prop)) {
-                GetEntDataVector(entity, prop.offset, g_fillrot[client][i]);
-                SetEntDataVector(entity, prop.offset, {2048.0, 2048.0, 2048.0}, true);
-            }
+            if (HasNetworkableProp(entity, "m_vecOrigin"))
+                if (!CompareVectors(state.pos, state_prev.pos))
+                    SetSendVar(entity, client, "m_vecOrigin", SendVarVector(state.pos), 3);
 
-            prop = g_projs[client][i].message.vel.prop;
-            if (prop && !UseRealCoordMP(prop)) {
-                GetEntDataVector(entity, prop.offset, g_fillvel[client][i]);
-                SetEntDataVector(entity, prop.offset, {2048.0, 2048.0, 2048.0}, true);
-            }
+            if (HasNetworkableProp(entity, "m_angRotation"))
+                if (!CompareVectors(state.rot, state_prev.rot))
+                    SetSendVar(entity, client, "m_angRotation", SendVarVector(state.rot, true), 3);
 
-            prop = g_projs[client][i].message.angvel.prop;
-            if (prop && !UseRealCoordMP(prop)) {
-                GetEntDataVector(entity, prop.offset, g_fillangvel[client][i]);
-                SetEntDataVector(entity, prop.offset, {2048.0, 2048.0, 2048.0}, true);
-            }
+            if (HasNetworkableProp(entity, "m_vecVelocity"))
+                if (!CompareVectors(state.vel, state_prev.vel))
+                    SetSendVar(entity, client, "m_vecVelocity", SendVarVector(state.vel), 3);
+
+            if (HasNetworkableProp(entity, "m_vecAngVelocity"))
+                if (!CompareVectors(state.angvel, state_prev.angvel))
+                    SetSendVar(entity, client, "m_vecAngVelocity", SendVarVector(state.angvel, true), 3);
         }
     }
-
-    return MRES_Ignored;
-}
-
-MRESReturn Fakedelay_Detour_Post_SV_ComputeClientPacks(DHookParam hParams)
-{
-    for (int client = 1; client <= MaxClients; client++) {
-        if (!IsActivePlayer(client))
-            continue;
-
-        if (g_sessions[client].fakedelay < 0)
-            continue;
-
-        for (int i = 0; i < g_numprojs[client]; i++) {
-            int entity = g_projs[client][i].Entity();
-            if (entity == -1)
-                continue;
-
-            if (!g_projs[client][i].IsPredictable())
-                continue;
-
-            SendProp prop;
-
-            prop = g_projs[client][i].message.pos.prop;
-            if (prop && !UseRealCoordMP(prop))
-                SetEntDataVector(entity, prop.offset, g_fillpos[client][i], false);
-
-            prop = g_projs[client][i].message.rot.prop;
-            if (prop && !UseRealCoordMP(prop))
-                SetEntDataVector(entity, prop.offset, g_fillrot[client][i], false);
-
-            prop = g_projs[client][i].message.vel.prop;
-            if (prop && !UseRealCoordMP(prop))
-                SetEntDataVector(entity, prop.offset, g_fillvel[client][i], false);
-
-            prop = g_projs[client][i].message.angvel.prop;
-            if (prop && !UseRealCoordMP(prop))
-                SetEntDataVector(entity, prop.offset, g_fillangvel[client][i], false);
-
-            if (!FindProjectileBitOffsets(client, i))
-                continue;
-
-            BitBuffer buffer = g_framesnapshotmanager.packeddata.Get(entity).data;
-
-            SendPropInfo propinfo;
-
-            propinfo = g_projs[client][i].message.pos;
-            if (propinfo.bit != -1 && !UseRealCoordMP(propinfo.prop))
-                buffer.WritePropVector(propinfo, propinfo.bit, g_fillpos[client][i]);
-
-            propinfo = g_projs[client][i].message.rot;
-            if (propinfo.bit != -1 && !UseRealCoordMP(propinfo.prop))
-                buffer.WritePropVector(propinfo, propinfo.bit, g_fillrot[client][i]);
-
-            propinfo = g_projs[client][i].message.vel;
-            if (propinfo.bit != -1 && !UseRealCoordMP(propinfo.prop))
-                buffer.WritePropVector(propinfo, propinfo.bit, g_fillvel[client][i]);
-
-            propinfo = g_projs[client][i].message.angvel;
-            if (propinfo.bit != -1 && !UseRealCoordMP(propinfo.prop))
-                buffer.WritePropVector(propinfo, propinfo.bit, g_fillangvel[client][i]);
-        }
-    }
-
-    return MRES_Ignored;
-}
-
-int g_datapos[MAX_PROJECTILES][3+1];
-int g_datarot[MAX_PROJECTILES][3+1];
-int g_datavel[MAX_PROJECTILES][3+1];
-int g_dataangvel[MAX_PROJECTILES][3+1];
-MRESReturn Fakedelay_Detour_Pre_CGameClient__SendSnapshot(Address pThis, DHookParam hParams)
-{
-    int client = LoadFromAddress(pThis + view_as<Address>(16), NumberType_Int32);
-    if (!IsActivePlayer(client))
-        return MRES_Ignored;
-
-    if (g_sessions[client].fakedelay < 0)
-        return MRES_Ignored;
-
-    for (int i = 0; i < g_numprojs[client]; i++) {
-        int entity = g_projs[client][i].Entity();
-        if (entity == -1)
-            continue;
-
-        if (!g_projs[client][i].IsPredictable())
-            continue;
-
-        BitBuffer buffer = g_framesnapshotmanager.packeddata.Get(entity).data;
-
-        SendPropInfo propinfo;
-
-        propinfo = g_projs[client][i].message.pos;
-        if (propinfo.bit != -1)
-            for (int offset = 0; offset < 3+1; offset++)
-                g_datapos[i][offset] = LoadFromAddress(view_as<Address>(buffer) + view_as<Address>((propinfo.bit / 32) * 4) + view_as<Address>(offset*4), NumberType_Int32);
-
-        propinfo = g_projs[client][i].message.rot;
-        if (propinfo.bit != -1)
-            for (int offset = 0; offset < 3+1; offset++)
-                g_datarot[i][offset] = LoadFromAddress(view_as<Address>(buffer) + view_as<Address>((propinfo.bit / 32) * 4) + view_as<Address>(offset*4), NumberType_Int32);
-
-        propinfo = g_projs[client][i].message.vel;
-        if (propinfo.bit != -1)
-            for (int offset = 0; offset < 3+1; offset++)
-                g_datavel[i][offset] = LoadFromAddress(view_as<Address>(buffer) + view_as<Address>((propinfo.bit / 32) * 4) + view_as<Address>(offset*4), NumberType_Int32);
-
-        propinfo = g_projs[client][i].message.angvel;
-        if (propinfo.bit != -1)
-            for (int offset = 0; offset < 3+1; offset++)
-                g_dataangvel[i][offset] = LoadFromAddress(view_as<Address>(buffer) + view_as<Address>((propinfo.bit / 32) * 4) + view_as<Address>(offset*4), NumberType_Int32);
-
-        int frame = g_tickcount_frame + g_projs[client][i].clientdelay - RoundToCeil(g_sessions[client].fakedelay / 1000.0 / g_globals.interval_per_tick);
-
-        ProjectileState state;
-        state = g_projs[client][i].GetState(frame);
-
-        propinfo = g_projs[client][i].message.pos;
-        if (propinfo.bit != -1)
-            buffer.WritePropVector(propinfo, propinfo.bit, state.pos);
-
-        propinfo = g_projs[client][i].message.rot;
-        if (propinfo.bit != -1)
-            buffer.WritePropVector(propinfo, propinfo.bit, state.rot);
-
-        propinfo = g_projs[client][i].message.vel;
-        if (propinfo.bit != -1)
-            buffer.WritePropVector(propinfo, propinfo.bit, state.vel);
-
-        propinfo = g_projs[client][i].message.angvel;
-        if (propinfo.bit != -1)
-            buffer.WritePropVector(propinfo, propinfo.bit, state.angvel);
-    }
-
-    return MRES_Ignored;
-}
-
-MRESReturn Fakedelay_Detour_Post_CGameClient__SendSnapshot(Address pThis, DHookParam hParams)
-{
-    int client = LoadFromAddress(pThis + view_as<Address>(16), NumberType_Int32);
-    if (!IsActivePlayer(client))
-        return MRES_Ignored;
-
-    if (g_sessions[client].fakedelay < 0)
-        return MRES_Ignored;
-
-    for (int i = 0; i < g_numprojs[client]; i++) {
-        int entity = g_projs[client][i].Entity();
-        if (entity == -1)
-            continue;
-
-        if (!g_projs[client][i].IsPredictable())
-            continue;
-
-        BitBuffer buffer = g_framesnapshotmanager.packeddata.Get(entity).data;
-
-        SendPropInfo prop;
-
-        prop = g_projs[client][i].message.pos;
-        if (prop.bit != -1)
-            for (int offset = 0; offset < 3+1; offset++)
-                StoreToAddress(view_as<Address>(buffer) + view_as<Address>((prop.bit / 32) * 4) + view_as<Address>(offset*4), g_datapos[i][offset], NumberType_Int32, false);
-
-        prop = g_projs[client][i].message.rot;
-        if (prop.bit != -1)
-            for (int offset = 0; offset < 3+1; offset++)
-                StoreToAddress(view_as<Address>(buffer) + view_as<Address>((prop.bit / 32) * 4) + view_as<Address>(offset*4), g_datarot[i][offset], NumberType_Int32, false);
-
-        prop = g_projs[client][i].message.vel;
-        if (prop.bit != -1)
-            for (int offset = 0; offset < 3+1; offset++)
-                StoreToAddress(view_as<Address>(buffer) + view_as<Address>((prop.bit / 32) * 4) + view_as<Address>(offset*4), g_datavel[i][offset], NumberType_Int32, false);
-
-        prop = g_projs[client][i].message.angvel;
-        if (prop.bit != -1)
-            for (int offset = 0; offset < 3+1; offset++)
-                StoreToAddress(view_as<Address>(buffer) + view_as<Address>((prop.bit / 32) * 4) + view_as<Address>(offset*4), g_dataangvel[i][offset], NumberType_Int32, false);
-    }
-
-    return MRES_Ignored;
 }

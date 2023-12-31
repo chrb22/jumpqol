@@ -62,19 +62,6 @@
                 // A1 ? ? ? ? 56 83 78 ? 00 7E ? in ApplyMultiDamage
             }
 
-            "&framesnapshotmanager"
-            {
-                "library"   "engine"
-                "linux"     "@framesnapshotmanager"
-            }
-
-            "mov ecx,[framesnapshotmanager]"
-            {
-                "library"   "engine"
-                "windows"   "\x8B\x0D\x2A\x2A\x2A\x2A\x53\xE8\x2A\x2A\x2A\x2A\x8B\xF8"
-                // 8B 0D ? ? ? ? 53 E8 ? ? ? ? 8B F8 in CBaseServer::UncompressPackedEntity
-            }
-
             "&IMoveHelper::sm_pSingleton"
             {
                 "library"   "server"
@@ -86,19 +73,6 @@
                 "library"   "server"
                 "windows"   "\x8B\x0D\x2A\x2A\x2A\x2A\x8B\x01\xFF\x50\x2A\x8B\x07"
                 // 8B 0D ? ? ? ? 8B 01 FF 50 ? 8B 07 in CGameMovement::PlayerMove
-            }
-
-            "&g_PropTypeFns"
-            {
-                "library"   "engine"
-                "linux"     "@g_PropTypeFns"
-            }
-
-            "mov eax,[eax*0x4 + g_PropTypeFns]"
-            {
-                "library"   "engine"
-                "windows"   "\x8B\x04\x85\x2A\x2A\x2A\x2A\xFF\xD0\x83\xC4\x14"
-                // 8B 04 85 ? ? ? ? FF D0 83 C4 14 in SendTable_EncodeProp inlined in SendTable_Encode
             }
 
             "UTIL_DecalTrace"
@@ -223,12 +197,6 @@
                 "windows"   "272"
             }
 
-            "CServerNetworkProperty::m_pServerClass"
-            {
-                "linux"     "48"
-                "windows"   "40"
-            }
-
             "client CBaseCombatWeapon::ItemPostFrame"
             {
                 "windows"   "268"
@@ -277,21 +245,6 @@
                 }
             }
 
-            "framesnapshotmanager"
-            {
-                "linux"
-                {
-                    "signature" "&framesnapshotmanager"
-                    "read"      "0" // *&framesnapshotmanager
-                }
-                "windows"
-                {
-                    "signature" "mov ecx,[framesnapshotmanager]"
-                    "read"      "2" // &framesnapshotmanager
-                    "read"      "0" // *&framesnapshotmanager
-                }
-            }
-
             "&MoveHelperServer()::s_MoveHelperServer"
             {
                 "linux"
@@ -304,19 +257,6 @@
                     "signature" "mov ecx,[IMoveHelper::sm_pSingleton]"
                     "read"      "2" // &IMoveHelper::sm_pSingleton
                     // "read"      "0" // *&IMoveHelper::sm_pSingleton // not needed???
-                }
-            }
-
-            "&g_PropTypeFns"
-            {
-                "linux"
-                {
-                    "signature" "&g_PropTypeFns"
-                }
-                "windows"
-                {
-                    "signature" "mov eax,[eax*0x4 + g_PropTypeFns]"
-                    "read"      "3" // &g_PropTypeFns
                 }
             }
 
