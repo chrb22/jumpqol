@@ -9,7 +9,7 @@ public Plugin myinfo =
     name = "JumpQoL",
     author = "ILDPRUT",
     description = "Adds various improvements to jumping.",
-    version = "1.0.8",
+    version = "1.0.9",
 }
 
 #define DEBUG 0
@@ -590,6 +590,8 @@ enum
     DETOUR_UTIL_DECALTRACE,
     DETOUR_TFPLAYERTHINK,
     DETOUR_ITEMBUSYFRAME,
+    DETOUR_CLIENT_ITEMPOSTFRAME,
+    DETOUR_CLIENT_ITEMBUSYFRAME,
     DETOUR_SETGROUNDENTITY,
     DETOUR_CM_CLIPBOXTOBRUSH,
     DETOUR_SENDCLIENTMESSAGES,
@@ -1850,6 +1852,21 @@ public void OnPluginStart()
     g_detours[DETOUR_TFPLAYERTHINK].Init(
         "CTFPlayer::TFPlayerThink",
         CallConv_THISCALL, ReturnType_Void, ThisPointer_CBaseEntity,
+        {HookParamType_Unknown}
+    );
+    g_detours[DETOUR_ITEMBUSYFRAME].Init(
+        "CTFWeaponBase::ItemBusyFrame",
+        CallConv_THISCALL, ReturnType_Void, ThisPointer_CBaseEntity,
+        {HookParamType_Unknown}
+    );
+    g_detours[DETOUR_CLIENT_ITEMPOSTFRAME].Init(
+        "client CBasePlayer::ItemPostFrame",
+        CallConv_THISCALL, ReturnType_Void, ThisPointer_Address,
+        {HookParamType_Unknown}
+    );
+    g_detours[DETOUR_CLIENT_ITEMBUSYFRAME].Init(
+        "client CTFWeaponBase::ItemBusyFrame",
+        CallConv_THISCALL, ReturnType_Void, ThisPointer_Address,
         {HookParamType_Unknown}
     );
     g_detours[DETOUR_ITEMBUSYFRAME].Init(
@@ -3215,7 +3232,22 @@ _reloadfire
 
 
 
+bool g_reloadfire_client_working;
+bool LogReloadFireSoundFixWarning(const char[] message)
+{
+    g_reloadfire_client_working = false;
+    LogMessage("Unable to setup reloadfire sound fix: %s. Are you using SourceMod 1.12?", message);
+    return true;
+}
+
+
+
+
+
 Handle g_Call_ItemPostFrame;
+Handle g_Call_Client_ItemPostFrame;
+int g_reloadfire_client_m_RefEHandle_offset;
+int g_reloadfire_client_m_flNextAttack_offset;
 bool Reloadfire_Init()
 {
     StartPrepSDKCall(SDKCall_Entity);
@@ -3226,6 +3258,29 @@ bool Reloadfire_Init()
     if (g_Call_ItemPostFrame == INVALID_HANDLE)
         return SetError("Failed to prepare CBaseCombatWeapon::ItemPostFrame call.");
 
+    if (IsDedicatedServer())
+        return true;
+
+    // client only
+
+    g_reloadfire_client_working = true;
+
+    StartPrepSDKCall(SDKCall_Raw);
+    if (!PrepSDKCall_SetFromConf(g_gameconf, SDKConf_Virtual, "client CBaseCombatWeapon::ItemPostFrame"))
+        return LogReloadFireSoundFixWarning("Failed to prepare client CBaseCombatWeapon::ItemPostFrame call.");
+
+    g_Call_Client_ItemPostFrame = EndPrepSDKCall();
+    if (g_Call_Client_ItemPostFrame == INVALID_HANDLE)
+        return LogReloadFireSoundFixWarning("Failed to prepare client CBaseCombatWeapon::ItemPostFrame call.");
+
+    g_reloadfire_client_m_RefEHandle_offset = GameConfGetOffset(g_gameconf, "client CBaseEntity::m_RefEHandle");
+    if (g_reloadfire_client_m_RefEHandle_offset == -1)
+        return LogReloadFireSoundFixWarning("Failed to get client CBaseEntity::m_RefEHandle offset.");
+
+    g_reloadfire_client_m_flNextAttack_offset = GameConfGetOffset(g_gameconf, "client CBaseCombatCharacter::m_flNextAttack");
+    if (g_reloadfire_client_m_flNextAttack_offset == -1)
+        return LogReloadFireSoundFixWarning("Failed to get client CBaseCombatCharacter::m_flNextAttack offset.");
+
     return true;
 }
 
@@ -3234,12 +3289,31 @@ bool Reloadfire_Start()
     if (!g_detours[DETOUR_ITEMBUSYFRAME].Enable(_, Reloadfire_Detour_Post_CTFWeaponBase__ItemBusyFrame))
         return false;
 
+    if (IsDedicatedServer() || !g_reloadfire_client_working)
+        return true;
+
+    // client only
+
+    if (!g_detours[DETOUR_CLIENT_ITEMPOSTFRAME].Enable(Reloadfire_Detour_Client_Pre_CBasePlayer__ItemPostFrame, _))
+        return LogReloadFireSoundFixWarning(g_error);
+
+    if (!g_detours[DETOUR_CLIENT_ITEMBUSYFRAME].Enable(_, Reloadfire_Detour_Client_Post_CTFWeaponBase__ItemBusyFrame))
+        return LogReloadFireSoundFixWarning(g_error);
+
     return true;
 }
 
 void Reloadfire_Stop()
 {
     g_detours[DETOUR_ITEMBUSYFRAME].Disable(_, Reloadfire_Detour_Post_CTFWeaponBase__ItemBusyFrame);
+
+    if (IsDedicatedServer() || !g_reloadfire_client_working)
+        return;
+
+    // client only
+
+    g_detours[DETOUR_CLIENT_ITEMPOSTFRAME].Disable(Reloadfire_Detour_Client_Pre_CBasePlayer__ItemPostFrame, _);
+    g_detours[DETOUR_CLIENT_ITEMBUSYFRAME].Disable(_, Reloadfire_Detour_Client_Post_CTFWeaponBase__ItemBusyFrame);
 }
 
 MRESReturn Reloadfire_Detour_Post_CTFWeaponBase__ItemBusyFrame(int entity)
@@ -3256,6 +3330,37 @@ MRESReturn Reloadfire_Detour_Post_CTFWeaponBase__ItemBusyFrame(int entity)
         return MRES_Ignored;
 
     SDKCall(g_Call_ItemPostFrame, entity);
+
+    return MRES_Handled;
+}
+
+
+
+
+
+Address g_reloadfire_client_client;
+MRESReturn Reloadfire_Detour_Client_Pre_CBasePlayer__ItemPostFrame(Address client)
+{
+    g_reloadfire_client_client = client;
+
+    return MRES_Ignored;
+}
+
+MRESReturn Reloadfire_Detour_Client_Post_CTFWeaponBase__ItemBusyFrame(Address entity)
+{
+    int clienthandle = LoadFromAddress(g_reloadfire_client_client + view_as<Address>(g_reloadfire_client_m_RefEHandle_offset), NumberType_Int32);
+    int client = clienthandle & (MAX_EDICTS - 1);
+    if (!IsActivePlayer(client))
+        return MRES_Ignored;
+
+    if (!g_sessions[client].reloadfire)
+        return MRES_Ignored;
+
+    float m_flNextAttack = LoadFromAddress(g_reloadfire_client_client + view_as<Address>(g_reloadfire_client_m_flNextAttack_offset), NumberType_Int32);
+    if (m_flNextAttack < g_globals.curtime)
+        return MRES_Ignored;
+
+    SDKCall(g_Call_Client_ItemPostFrame, entity);
 
     return MRES_Handled;
 }

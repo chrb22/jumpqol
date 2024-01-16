@@ -117,6 +117,20 @@
                 // 55 8B EC 51 56 57 8B F1 E8 ? ? ? ? 8B CE E8 ? ? ? ? 8B F8 85 FF 0F 84 ? ? ? ? 8B 17
             }
 
+            "client CBasePlayer::ItemPostFrame"
+            {
+                "library"   "client"
+                "windows"   "\x55\x8B\xEC\x83\xEC\x1C\x53\x56\x57\x8B\xF9\x89\x7D\x2A"
+                // 55 8B EC 83 EC 1C 53 56 57 8B F9 89 7D ?
+            }
+
+            "client CTFWeaponBase::ItemBusyFrame"
+            {
+                "library"   "client"
+                "windows"   "\x55\x8B\xEC\x51\x56\x57\x8B\xF1\xE8\x2A\x2A\x2A\x2A\x8B\xCE\xE8\x2A\x2A\x2A\x2A\x8B\xF8\x85\xFF\x0F\x84\x2A\x2A\x2A\x2A\x8B\x17\x8B\xCF\x8B\x92\x2A\x2A\x2A\x2A\xFF\xD2\x84\xC0\x0F\x84\x2A\x2A\x2A\x2A"
+                // 55 8B EC 51 56 57 8B F1 E8 ? ? ? ? 8B CE E8 ? ? ? ? 8B F8 85 FF 0F 84 ? ? ? ? 8B 17 8B CF 8B 92 ? ? ? ? FF D2 84 C0 0F 84 ? ? ? ?
+            }
+
             "CTFWeaponBase::ItemPostFrame"
             {
                 "library"   "server"
@@ -213,6 +227,21 @@
             {
                 "linux"     "48"
                 "windows"   "40"
+            }
+
+            "client CBaseCombatWeapon::ItemPostFrame"
+            {
+                "windows"   "268"
+            }
+
+            "client CBaseEntity::m_RefEHandle"
+            {
+                "windows"   "0xc4"
+            }
+
+            "client CBaseCombatCharacter::m_flNextAttack"
+            {
+                "windows"   "0xc70"
             }
         }
 
