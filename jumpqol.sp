@@ -12,7 +12,7 @@ public Plugin myinfo =
     name = "JumpQoL",
     author = "ILDPRUT",
     description = "Adds various improvements to jumping.",
-    version = "1.1.0",
+    version = "1.1.1",
 }
 
 #define DEBUG 0
@@ -648,6 +648,7 @@ bool SettingActiveDefaultFloatG(any value) { return view_as<float>(value) > 0.0;
 bool SettingActiveDefaultFloatGE(any value) { return view_as<float>(value) >= 0.0; }
 SettingAllow SettingChangeDefault(int client, any value) { return SETTING_ALLOW; }
 
+ConVar g_Setting_ConVar_autostop;
 enum struct Setting
 {
     char name[64];
@@ -667,6 +668,7 @@ enum struct Setting
 
     SettingActive f_active;
     SettingChange f_change;
+    bool running;
     int numusing;
 
     bool active[MAXPLAYERS + 1];
@@ -706,6 +708,8 @@ enum struct Setting
 
         if (!this.f_change)
             this.f_change = SettingChangeDefault;
+
+        this.running = false;
 
         this.numusing = 0;
         for (int client = 0; client < MAXPLAYERS + 1; client++)
@@ -762,6 +766,7 @@ enum struct Setting
         }
 
         this.working = false;
+        this.running = false;
         this.numusing = 0;
 
         bool setting_default = this.GetDefault();
@@ -875,7 +880,7 @@ enum struct Setting
     bool SetActive(int client, bool active)
     {
         if (active != this.active[client]) {
-            if (active && this.numusing == 0) {
+            if (active && !this.running) {
                 bool success;
                 Call_StartFunction(INVALID_HANDLE, this.f_start);
                 Call_Finish(success);
@@ -886,10 +891,14 @@ enum struct Setting
 
                     return false;
                 }
+
+                this.running = true;
             }
-            else if (!active && this.numusing == 1) {
+            else if (!active && this.numusing == 1 && g_Setting_ConVar_autostop.BoolValue) {
                 Call_StartFunction(INVALID_HANDLE, this.f_stop);
                 Call_Finish();
+
+                this.running = false;
             }
 
             this.numusing += active ? 1 : -1;
@@ -992,6 +1001,26 @@ enum
     NUM_SETTINGS,
 };
 Setting g_settings[NUM_SETTINGS];
+
+
+
+
+
+void ConVarChanged_Setting_Autostop(ConVar convar, const char[] old_value, const char[] new_value)
+{
+    bool autostop = !!StringToInt(new_value);
+    if (!autostop)
+        return;
+
+    for (int setting = 0; setting < NUM_SETTINGS; setting++) {
+        if (g_settings[setting].running && g_settings[setting].numusing == 0) {
+            Call_StartFunction(INVALID_HANDLE, g_settings[setting].f_stop);
+            Call_Finish();
+
+            g_settings[setting].running = false;
+        }
+    }
+}
 
 
 
@@ -1860,6 +1889,18 @@ public void OnPluginStart()
 
     // Settings
     RegConsoleCmd("sm_jumpqol", Command_Plugin);
+
+    g_Setting_ConVar_autostop = CreateConVar(
+        "sm_jumpqol_setting_autostop",
+        "0",
+        "Controls if a setting should stop running when nobody is using it.\nDetours changing page permissions can seemingly lead to lag on virtualized servers, so this exists to mitigate that.",
+        _,
+        true,
+        0.0,
+        true,
+        1.0
+    );
+    g_Setting_ConVar_autostop.AddChangeHook(ConVarChanged_Setting_Autostop);
 
     g_settings[SETTING_RANDPROJVEL].name = "randprojvel";
     g_settings[SETTING_RANDPROJVEL].desc = "Controls if pipes and stickies should have some spread when fired.";
