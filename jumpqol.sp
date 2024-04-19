@@ -12,7 +12,7 @@ public Plugin myinfo =
     name = "JumpQoL",
     author = "ILDPRUT",
     description = "Adds various improvements to jumping.",
-    version = "1.1.1",
+    version = "1.1.2",
 }
 
 #define DEBUG 0
@@ -580,7 +580,6 @@ enum
     DETOUR_PHYSICS_SIMULATEENTITY,
     DETOUR_SERVICEEVENTS,
     DETOUR_ITEMPOSTFRAME,
-    DETOUR_FIREPIPEBOMB,
     DETOUR_UTIL_DECALTRACE,
     DETOUR_TFPLAYERTHINK,
     DETOUR_ITEMBUSYFRAME,
@@ -986,8 +985,6 @@ enum struct Setting
 
 enum
 {
-    SETTING_RANDPROJVEL,
-    SETTING_RANDPROJANGVEL,
     SETTING_PROJDECALS,
     SETTING_SHOWDETDECALS,
     SETTING_KEEPBLASTSTATE,
@@ -1652,22 +1649,6 @@ methodmap Session
         return true;
     }
 
-    property bool randprojvel
-    {
-        public get()
-        {
-            return g_settings[SETTING_RANDPROJVEL].values[this.client];
-        }
-    }
-
-    property bool randprojangvel
-    {
-        public get()
-        {
-            return g_settings[SETTING_RANDPROJANGVEL].values[this.client];
-        }
-    }
-
     property bool projdecals
     {
         public get()
@@ -1837,11 +1818,6 @@ public void OnPluginStart()
         CallConv_THISCALL, ReturnType_Void, ThisPointer_CBaseEntity,
         {HookParamType_Unknown}
     );
-    g_detours[DETOUR_FIREPIPEBOMB].Init(
-        "CTFWeaponBaseGun::FirePipeBomb",
-        CallConv_THISCALL, ReturnType_CBaseEntity, ThisPointer_CBaseEntity,
-        {HookParamType_CBaseEntity, HookParamType_Int, HookParamType_Unknown}
-    );
     g_detours[DETOUR_UTIL_DECALTRACE].Init(
         "UTIL_DecalTrace",
         CallConv_CDECL, ReturnType_Void, ThisPointer_Ignore,
@@ -1901,30 +1877,6 @@ public void OnPluginStart()
         1.0
     );
     g_Setting_ConVar_autostop.AddChangeHook(ConVarChanged_Setting_Autostop);
-
-    g_settings[SETTING_RANDPROJVEL].name = "randprojvel";
-    g_settings[SETTING_RANDPROJVEL].desc = "Controls if pipes and stickies should have some spread when fired.";
-    g_settings[SETTING_RANDPROJVEL].expl = "";
-    g_settings[SETTING_RANDPROJVEL].type = SETTING_BOOL;
-    g_settings[SETTING_RANDPROJVEL].f_init = Randprojvel_Init;
-    g_settings[SETTING_RANDPROJVEL].f_start = Randprojvel_Start;
-    g_settings[SETTING_RANDPROJVEL].f_stop = Randprojvel_Stop;
-    g_settings[SETTING_RANDPROJVEL].f_active = SettingActiveDefaultBoolNeg;
-    g_settings[SETTING_RANDPROJVEL].range[0] = 0.0;
-    g_settings[SETTING_RANDPROJVEL].range[1] = 1.0;
-    g_settings[SETTING_RANDPROJVEL].Init(true, true);
-
-    g_settings[SETTING_RANDPROJANGVEL].name = "randprojangvel";
-    g_settings[SETTING_RANDPROJANGVEL].desc = "Controls if pipes and stickies should be fired with a random angular velocity.";
-    g_settings[SETTING_RANDPROJANGVEL].expl = "";
-    g_settings[SETTING_RANDPROJANGVEL].type = SETTING_BOOL;
-    g_settings[SETTING_RANDPROJANGVEL].f_init = Randprojangvel_Init;
-    g_settings[SETTING_RANDPROJANGVEL].f_start = Randprojangvel_Start;
-    g_settings[SETTING_RANDPROJANGVEL].f_stop = Randprojangvel_Stop;
-    g_settings[SETTING_RANDPROJANGVEL].f_active = SettingActiveDefaultBoolNeg;
-    g_settings[SETTING_RANDPROJANGVEL].range[0] = 0.0;
-    g_settings[SETTING_RANDPROJANGVEL].range[1] = 1.0;
-    g_settings[SETTING_RANDPROJANGVEL].Init(true, true);
 
     g_settings[SETTING_PROJDECALS].name = "projdecals";
     g_settings[SETTING_PROJDECALS].desc = "Controls if decals should be elongated when a prop is hit at an angle.";
@@ -2865,172 +2817,6 @@ MRESReturn Required_Detour_Post_CTFWeaponBase__ItemPostFrame(int entity)
     }
 
     return MRES_Ignored;
-}
-
-
-
-
-
-/*
-_randprojvel
-██████   █████  ███    ██ ██████  ██████  ██████   ██████       ██ ██    ██ ███████ ██     
-██   ██ ██   ██ ████   ██ ██   ██ ██   ██ ██   ██ ██    ██      ██ ██    ██ ██      ██     
-██████  ███████ ██ ██  ██ ██   ██ ██████  ██████  ██    ██      ██ ██    ██ █████   ██     
-██   ██ ██   ██ ██  ██ ██ ██   ██ ██      ██   ██ ██    ██ ██   ██  ██  ██  ██      ██     
-██   ██ ██   ██ ██   ████ ██████  ██      ██   ██  ██████   █████    ████   ███████ ███████
-*/
-
-
-
-
-
-Address g_pipebomb_rand_right_address[2];
-float g_pipebomb_rand_right_value[2];
-Address g_pipebomb_rand_up_address[2];
-float g_pipebomb_rand_up_value[2];
-bool Randprojvel_Init()
-{
-    g_pipebomb_rand_right_address[0] = GameConfGetAddress(g_gameconf, "CTFWeaponBaseGun::FirePipeBomb rand right min");
-    g_pipebomb_rand_right_address[1] = GameConfGetAddress(g_gameconf, "CTFWeaponBaseGun::FirePipeBomb rand right max");
-    if (!g_pipebomb_rand_right_address[0] || !g_pipebomb_rand_right_address[1])
-        return SetError("Failed to find CTFWeaponBaseGun::FirePipeBomb rand right.");
-
-    g_pipebomb_rand_right_value[0] = LoadFromAddress(g_pipebomb_rand_right_address[0], NumberType_Int32);
-    g_pipebomb_rand_right_value[1] = LoadFromAddress(g_pipebomb_rand_right_address[1], NumberType_Int32);
-
-    g_pipebomb_rand_up_address[0] = GameConfGetAddress(g_gameconf, "CTFWeaponBaseGun::FirePipeBomb rand up min");
-    g_pipebomb_rand_up_address[1] = GameConfGetAddress(g_gameconf, "CTFWeaponBaseGun::FirePipeBomb rand up max");
-    if (!g_pipebomb_rand_up_address[0] || !g_pipebomb_rand_up_address[1])
-        return SetError("Failed to find CTFWeaponBaseGun::FirePipeBomb rand up.");
-
-    g_pipebomb_rand_up_value[0] = LoadFromAddress(g_pipebomb_rand_up_address[0], NumberType_Int32);
-    g_pipebomb_rand_up_value[1] = LoadFromAddress(g_pipebomb_rand_up_address[1], NumberType_Int32);
-
-    return true;
-}
-
-bool Randprojvel_Start()
-{
-    if (!g_detours[DETOUR_FIREPIPEBOMB].Enable(Randprojvel_Detour_Pre_CTFWeaponBaseGun__FirePipeBomb, Randprojvel_Detour_Post_CTFWeaponBaseGun__FirePipeBomb))
-        return false;
-
-    return true;
-}
-
-void Randprojvel_Stop()
-{
-    g_detours[DETOUR_FIREPIPEBOMB].Disable(Randprojvel_Detour_Pre_CTFWeaponBaseGun__FirePipeBomb, Randprojvel_Detour_Post_CTFWeaponBaseGun__FirePipeBomb);
-}
-
-MRESReturn Randprojvel_Detour_Pre_CTFWeaponBaseGun__FirePipeBomb(int entity, DHookReturn hReturn, DHookParam hParams)
-{
-    int client = GetEntPropEnt(entity, Prop_Data, "m_hOwner");
-    if (!IsActivePlayer(client))
-        return MRES_Ignored;
-
-    if (g_sessions[client].randprojvel)
-        return MRES_Ignored;
-
-    StoreToAddress(g_pipebomb_rand_right_address[0], 0.0, NumberType_Int32);
-    StoreToAddress(g_pipebomb_rand_right_address[1], 0.0, NumberType_Int32);
-
-    StoreToAddress(g_pipebomb_rand_up_address[0], 0.0, NumberType_Int32);
-    StoreToAddress(g_pipebomb_rand_up_address[1], 0.0, NumberType_Int32);
-
-    return MRES_Ignored;
-}
-
-MRESReturn Randprojvel_Detour_Post_CTFWeaponBaseGun__FirePipeBomb(int entity, DHookReturn hReturn, DHookParam hParams)
-{
-    int client = GetEntPropEnt(entity, Prop_Data, "m_hOwner");
-    if (!IsActivePlayer(client))
-        return MRES_Ignored;
-
-    if (!g_sessions[client].randprojvel)
-        return MRES_Ignored;
-
-    StoreToAddress(g_pipebomb_rand_right_address[0], g_pipebomb_rand_right_value[0], NumberType_Int32);
-    StoreToAddress(g_pipebomb_rand_right_address[1], g_pipebomb_rand_right_value[1], NumberType_Int32);
-
-    StoreToAddress(g_pipebomb_rand_up_address[0], g_pipebomb_rand_up_value[0], NumberType_Int32);
-    StoreToAddress(g_pipebomb_rand_up_address[1], g_pipebomb_rand_up_value[1], NumberType_Int32);
-
-    return MRES_Handled;
-}
-
-
-
-
-
-/*
-_randprojangvel
-██████   █████  ███    ██ ██████  ██████  ██████   ██████       ██  █████  ███    ██  ██████  ██    ██ ███████ ██     
-██   ██ ██   ██ ████   ██ ██   ██ ██   ██ ██   ██ ██    ██      ██ ██   ██ ████   ██ ██       ██    ██ ██      ██     
-██████  ███████ ██ ██  ██ ██   ██ ██████  ██████  ██    ██      ██ ███████ ██ ██  ██ ██   ███ ██    ██ █████   ██     
-██   ██ ██   ██ ██  ██ ██ ██   ██ ██      ██   ██ ██    ██ ██   ██ ██   ██ ██  ██ ██ ██    ██  ██  ██  ██      ██     
-██   ██ ██   ██ ██   ████ ██████  ██      ██   ██  ██████   █████  ██   ██ ██   ████  ██████    ████   ███████ ███████
-*/
-
-
-
-
-
-Address g_pipebomb_rand_yaw_address[2];
-int g_pipebomb_rand_yaw_value[2];
-bool Randprojangvel_Init()
-{
-    g_pipebomb_rand_yaw_address[0] = GameConfGetAddress(g_gameconf, "CTFWeaponBaseGun::FirePipeBomb rand yaw min");
-    g_pipebomb_rand_yaw_address[1] = GameConfGetAddress(g_gameconf, "CTFWeaponBaseGun::FirePipeBomb rand yaw max");
-    if (!g_pipebomb_rand_yaw_address[0] || !g_pipebomb_rand_yaw_address[1])
-        return SetError("Failed to find CTFWeaponBaseGun::FirePipeBomb rand yaw.");
-
-    g_pipebomb_rand_yaw_value[0] = LoadFromAddress(g_pipebomb_rand_yaw_address[0], NumberType_Int32);
-    g_pipebomb_rand_yaw_value[1] = LoadFromAddress(g_pipebomb_rand_yaw_address[1], NumberType_Int32);
-
-    return true;
-}
-
-bool Randprojangvel_Start()
-{
-    if (!g_detours[DETOUR_FIREPIPEBOMB].Enable(Randprojangvel_Detour_Pre_CTFWeaponBaseGun__FirePipeBomb, Randprojangvel_Detour_Post_CTFWeaponBaseGun__FirePipeBomb))
-        return false;
-
-    return true;
-}
-
-void Randprojangvel_Stop()
-{
-    g_detours[DETOUR_FIREPIPEBOMB].Disable(Randprojangvel_Detour_Pre_CTFWeaponBaseGun__FirePipeBomb, Randprojangvel_Detour_Post_CTFWeaponBaseGun__FirePipeBomb);
-}
-
-MRESReturn Randprojangvel_Detour_Pre_CTFWeaponBaseGun__FirePipeBomb(int entity, DHookReturn hReturn, DHookParam hParams)
-{
-    int client = GetEntPropEnt(entity, Prop_Data, "m_hOwner");
-    if (!IsActivePlayer(client))
-        return MRES_Ignored;
-
-    if (g_sessions[client].randprojvel)
-        return MRES_Ignored;
-
-    StoreToAddress(g_pipebomb_rand_yaw_address[0], 0, NumberType_Int32);
-    StoreToAddress(g_pipebomb_rand_yaw_address[1], 0, NumberType_Int32);
-
-    return MRES_Ignored;
-}
-
-MRESReturn Randprojangvel_Detour_Post_CTFWeaponBaseGun__FirePipeBomb(int entity, DHookReturn hReturn, DHookParam hParams)
-{
-    int client = GetEntPropEnt(entity, Prop_Data, "m_hOwner");
-    if (!IsActivePlayer(client))
-        return MRES_Ignored;
-
-    if (!g_sessions[client].randprojvel)
-        return MRES_Ignored;
-
-    StoreToAddress(g_pipebomb_rand_yaw_address[0], g_pipebomb_rand_yaw_value[0], NumberType_Int32);
-    StoreToAddress(g_pipebomb_rand_yaw_address[1], g_pipebomb_rand_yaw_value[1], NumberType_Int32);
-
-    return MRES_Handled;
 }
 
 
