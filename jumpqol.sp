@@ -3620,11 +3620,11 @@ MRESReturn Slideebfix_Detour_Pre_CTFGameMovement__SetGroundEntity(Address pThis,
     float gravity = GetGravity(client);
 
 
-    int m_TouchList_m_Size = LoadFromAddress(g_slideebfix_movehelper + view_as<Address>(8) + view_as<Address>(16), NumberType_Int32);
+    int m_TouchList_m_Size = LoadFromAddress(g_slideebfix_movehelper + view_as<Address>(4) + view_as<Address>(16), NumberType_Int32);
     if (m_TouchList_m_Size == 0)
         return MRES_Ignored; // No collisions during this tick
 
-    Address m_TouchList_m_pElements = LoadFromAddress(g_slideebfix_movehelper + view_as<Address>(8) + view_as<Address>(20), NumberType_Int32);
+    Address m_TouchList_m_pElements = LoadFromAddress(g_slideebfix_movehelper + view_as<Address>(4) + view_as<Address>(20), NumberType_Int32);
 
     Trace trace_slide = Trace(m_TouchList_m_pElements + view_as<Address>(0*96) + view_as<Address>(12));
     Trace trace_bottom = Trace(DHookGetParamAddress(hParams, 1));
