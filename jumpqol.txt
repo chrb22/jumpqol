@@ -223,7 +223,7 @@
                 "linux"
                 {
                     "signature" "&IMoveHelper::sm_pSingleton"
-                    // "read"      "0" // *&IMoveHelper::sm_pSingleton // not needed???
+                    "read"      "0" // *&IMoveHelper::sm_pSingleton
                 }
                 "windows"
                 {
