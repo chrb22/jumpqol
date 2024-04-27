@@ -12,30 +12,6 @@
                 // 55 8B EC 57 8B 7D ? 83 7F ? 00
             }
 
-            "CGameServer::SendClientMessages"
-            {
-                "library"   "engine"
-                "linux"     "@_ZN11CGameServer18SendClientMessagesEb"
-                "windows"   "\x55\x8B\xEC\x81\xEC\x30\x04\x00\x00\x53\x56\x57\x33\xDB"
-                // 55 8B EC 81 EC 30 04 00 00 53 56 57 33 DB
-            }
-
-            "SV_ComputeClientPacks"
-            {
-                "library"   "engine"
-                "linux"     "@_Z21SV_ComputeClientPacksiPP11CGameClientP14CFrameSnapshot"
-                "windows"   "\x55\x8B\xEC\x83\xEC\x38\x8B\x0D\x2A\x2A\x2A\x2A\x53\x33\xDB"
-                // 55 8B EC 83 EC 38 8B 0D ? ? ? ? 53 33 DB
-            }
-
-            "CGameClient::SendSnapshot"
-            {
-                "library"   "engine"
-                "linux"     "@_ZN11CGameClient12SendSnapshotEP12CClientFrame"
-                "windows"   "\x55\x8B\xEC\x83\xEC\x58\x53\x8B\xD9\x56"
-                // 55 8B EC 83 EC 58 53 8B D9 56
-            }
-
             "&gpGlobals"
             {
                 "library"   "server"
