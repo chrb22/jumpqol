@@ -62,10 +62,10 @@
                 // A1 ? ? ? ? 56 83 78 ? 00 7E ? in ApplyMultiDamage
             }
 
-            "&IMoveHelper::sm_pSingleton"
+            "&MoveHelperServer()::s_MoveHelperServer"
             {
                 "library"   "server"
-                "linux"     "@_ZN11IMoveHelper13sm_pSingletonE"
+                "linux"     "@_ZZ16MoveHelperServervE18s_MoveHelperServer"
             }
 
             "mov ecx,[IMoveHelper::sm_pSingleton]"
@@ -222,8 +222,7 @@
             {
                 "linux"
                 {
-                    "signature" "&IMoveHelper::sm_pSingleton"
-                    "read"      "0" // *&IMoveHelper::sm_pSingleton
+                    "signature" "&MoveHelperServer()::s_MoveHelperServer"
                 }
                 "windows"
                 {
