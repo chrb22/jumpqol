@@ -34,8 +34,8 @@
             "mov eax,[te]"
             {
                 "library"   "server"
-                "windows"   "\xA1\x2A\x2A\x2A\x2A\x56\x83\x78\x2A\x00\x7E\x2A"
-                // A1 ? ? ? ? 56 83 78 ? 00 7E ? in ApplyMultiDamage
+                "windows"   "\xA1\x2A\x2A\x2A\x2A\x83\x78\x2A\x00\x7E\x2A\x33\xFF"
+                // A1 ? ? ? ? 83 78 ? 00 7E ? 33 FF in ApplyMultiDamage inlined in AddMultiDamage
             }
 
             "&MoveHelperServer()::s_MoveHelperServer"
@@ -44,11 +44,11 @@
                 "linux"     "@_ZZ16MoveHelperServervE18s_MoveHelperServer"
             }
 
-            "mov ecx,[IMoveHelper::sm_pSingleton]"
+            "mov [IMoveHelper::sm_pSingleton],MoveHelperServer()::s_MoveHelperServer"
             {
                 "library"   "server"
-                "windows"   "\x8B\x0D\x2A\x2A\x2A\x2A\x8B\x01\xFF\x50\x2A\x8B\x07"
-                // 8B 0D ? ? ? ? 8B 01 FF 50 ? 8B 07 in CGameMovement::PlayerMove
+                "windows"   "\xC7\x05\x2A\x2A\x2A\x2A\x2A\x2A\x2A\x2A\xE8\x2A\x2A\x2A\x2A\x83\xC4\x08"
+                // C7 05 ? ? ? ? ? ? ? ? E8 ? ? ? ? 83 C4 08 in MoveHelperServer
             }
 
             "UTIL_DecalTrace"
@@ -63,30 +63,34 @@
             {
                 "library"   "server"
                 "linux"     "@_ZN13CTFWeaponBase13ItemBusyFrameEv"
-                "windows"   "\x55\x8B\xEC\x51\x56\x57\x8B\xF1\xE8\x2A\x2A\x2A\x2A\x8B\xCE\xE8\x2A\x2A\x2A\x2A\x8B\xF8\x85\xFF\x0F\x84\x2A\x2A\x2A\x2A\x8B\x17"
-                // 55 8B EC 51 56 57 8B F1 E8 ? ? ? ? 8B CE E8 ? ? ? ? 8B F8 85 FF 0F 84 ? ? ? ? 8B 17
+                "windows"   "\x55\x8B\xEC\x83\xEC\x08\x56\x57\x8B\xF1\xE8\x2A\x2A\x2A\x2A\x8B\xCE\xE8\x2A\x2A\x2A\x2A\x8B\xF8\x85\xFF\x0F\x84\x2A\x2A\x2A\x2A"
+                // 55 8B EC 83 EC 08 56 57 8B F1 E8 ? ? ? ? 8B CE E8 ? ? ? ? 8B F8 85 FF 0F 84 ? ? ? ?
+                // via vtable lookup diff from CTFPipebombLauncher::ItemPostFrame to CTFPipebombLauncher::ItemBusyFrame with base call
             }
 
             "client CBasePlayer::ItemPostFrame"
             {
                 "library"   "client"
-                "windows"   "\x55\x8B\xEC\x83\xEC\x1C\x53\x56\x57\x8B\xF9\x89\x7D\x2A"
-                // 55 8B EC 83 EC 1C 53 56 57 8B F9 89 7D ?
+                "windows"   "\x55\x8B\xEC\x83\xEC\x1C\x53\x56\x57\x8B\xF9\x89\x7D\x2A\x8D\x8F\x2A\x2A\x2A\x2A"
+                // 55 8B EC 83 EC 1C 53 56 57 8B F9 89 7D ? 8D 8F ? ? ? ?
+                // string "vehicleRole" to C_BasePlayer::SetVehicleRole into vtable offset minus 15 to CBase[TF]Player::ItemPostFrame
             }
 
             "client CTFWeaponBase::ItemBusyFrame"
             {
                 "library"   "client"
-                "windows"   "\x55\x8B\xEC\x51\x56\x57\x8B\xF1\xE8\x2A\x2A\x2A\x2A\x8B\xCE\xE8\x2A\x2A\x2A\x2A\x8B\xF8\x85\xFF\x0F\x84\x2A\x2A\x2A\x2A\x8B\x17\x8B\xCF\x8B\x92\x2A\x2A\x2A\x2A\xFF\xD2\x84\xC0\x0F\x84\x2A\x2A\x2A\x2A"
-                // 55 8B EC 51 56 57 8B F1 E8 ? ? ? ? 8B CE E8 ? ? ? ? 8B F8 85 FF 0F 84 ? ? ? ? 8B 17 8B CF 8B 92 ? ? ? ? FF D2 84 C0 0F 84 ? ? ? ?
+                "windows"   "\x55\x8B\xEC\x83\xEC\x08\x56\x57\x8B\xF1\xE8\x2A\x2A\x2A\x2A\x8B\xCE\xE8\x2A\x2A\x2A\x2A\x8B\xF8\x85\xFF\x0F\x84\x2A\x2A\x2A\x2A\x8B\x17\x8B\xCF\x8B\x92\x2A\x2A\x2A\x2A\xFF\xD2\x84\xC0\x0F\x84\x2A\x2A\x2A\x2A\xF7\x87\x2A\x2A\x2A\x2A\x00\x08\x00\x00"
+                // 55 8B EC 83 EC 08 56 57 8B F1 E8 ? ? ? ? 8B CE E8 ? ? ? ? 8B F8 85 FF 0F 84 ? ? ? ? 8B 17 8B CF 8B 92 ? ? ? ? FF D2 84 C0 0F 84 ? ? ? ? F7 87 ? ? ? ? 00 08 00 00
+                // via string "EFFECTS_THINK" and condition >0.0 to CTFFlareGun::ItemPostFrame and vtable lookup diff to CTFWeaponBase::ItemBusyFrame
             }
 
             "CTFWeaponBase::ItemPostFrame"
             {
                 "library"   "server"
                 "linux"     "@_ZN13CTFWeaponBase13ItemPostFrameEv"
-                "windows"   "\x56\x57\x8B\xF1\xE8\x2A\x2A\x2A\x2A\x8B\xF8\x85\xFF\x0F\x84\x2A\x2A\x2A\x2A\x8B\x17\x8B\xCF\x8B\x92\x2A\x2A\x2A\x2A\xFF\xD2\x84\xC0\x0F\x84\x2A\x2A\x2A\x2A\x8B\x06\x8B\xCE\x53"
-                // 56 57 8B F1 E8 ? ? ? ? 8B F8 85 FF 0F 84 ? ? ? ? 8B 17 8B CF 8B 92 ? ? ? ? FF D2 84 C0 0F 84 ? ? ? ? 8B 06 8B CE 53
+                "windows"   "\x56\x57\x8B\xF1\xE8\x2A\x2A\x2A\x2A\x8B\xF8\x85\xFF\x0F\x84\x2A\x2A\x2A\x2A\x8B\x17\x8B\xCF\x8B\x92\x2A\x2A\x2A\x2A\xFF\xD2\x84\xC0\x0F\x84\x2A\x2A\x2A\x2A\x8B\x06\x8B\xCE\x53\xFF\x90\x2A\x2A\x2A\x2A"
+                // 56 57 8B F1 E8 ? ? ? ? 8B F8 85 FF 0F 84 ? ? ? ? 8B 17 8B CF 8B 92 ? ? ? ? FF D2 84 C0 0F 84 ? ? ? ? 8B 06 8B CE 53 FF 90 ? ? ? ?
+                // via vtable lookup diff from CTFPipebombLauncher::SecondaryAttack with string "demoman_det_stickies" to CTFPipebombLauncher::ItemPostFrame with base call
             }
 
             "CTFWeaponBase::Energy_FullyCharged"
@@ -101,40 +105,32 @@
             {
                 "library"   "server"
                 "linux"     "@_ZN15CTFGameMovement15SetGroundEntityEP10CGameTrace"
-                "windows"   "\x55\x8B\xEC\x56\x8B\xF1\x57\x6A\x52"
-                // 55 8B EC 56 8B F1 57 6A 52
+                "windows"   "\x55\x8B\xEC\x83\xEC\x0C\x56\x8B\xF1\x57\x8B\x7D\x2A\x6A\x52"
+                // 55 8B EC 83 EC 0C 56 8B F1 57 8B 7D ? 6A 52
             }
 
             "CM_ClipBoxToBrush<false>"
             {
                 "library"   "engine"
                 "linux"     "@_Z17CM_ClipBoxToBrushILb0EEvP11TraceInfo_tPK8cbrush_t"
-                "windows"   "\x55\x8B\xEC\x83\xEC\x10\xB8\xFF\xFF\x00\x00"
-                // 55 8B EC 83 EC 10 B8 FF FF 00 00
-            }
-
-            "CBaseFilter::PassesFilter"
-            {
-                "library"   "server"
-                "linux"     "@_ZN11CBaseFilter12PassesFilterEP11CBaseEntityS1_"
-                "windows"   "\x55\x8B\xEC\x56\xFF\x75\x2A\x8B\xF1\xFF\x75\x2A\x8B\x06\x8B\x80\x2A\x2A\x2A\x2A"
-                // 55 8B EC 56 FF 75 ? 8B F1 FF 75 ? 8B 06 8B 80 ? ? ? ?
+                "windows"   "\x55\x8B\xEC\x0F\xB7\x42\x2A\x83\xEC\x10"
+                // 55 8B EC 0F B7 42 ? 83 EC 10
             }
 
             "CEventQueue::ServiceEvents"
             {
                 "library"   "server"
                 "linux"     "@_ZN11CEventQueue13ServiceEventsEv"
-                "windows"   "\x55\x8B\xEC\x81\xEC\x10\x01\x00\x00\x80\x3D\x2A\x2A\x2A\x2A\x00"
-                // 55 8B EC 81 EC 10 01 00 00 80 3D ? ? ? ? 00
+                "windows"   "\x55\x8B\xEC\x81\xEC\x18\x01\x00\x00\x80\x3D\x2A\x2A\x2A\x2A\x00"
+                // 55 8B EC 81 EC 18 01 00 00 80 3D ? ? ? ? 00
             }
 
             "CTFPlayer::TFPlayerThink"
             {
                 "library"   "server"
                 "linux"     "@_ZN9CTFPlayer13TFPlayerThinkEv"
-                "windows"   "\x53\x8B\xDC\x83\xEC\x08\x83\xE4\xF0\x83\xC4\x04\x55\x8B\x6B\x2A\x89\x6C\x24\x2A\x8B\xEC\x81\xEC\x78\x01\x00\x00\x56\x57"
-                // 53 8B DC 83 EC 08 83 E4 F0 83 C4 04 55 8B 6B ? 89 6C 24 ? 8B EC 81 EC 78 01 00 00 56 57
+                "windows"   "\x53\x8B\xDC\x83\xEC\x08\x83\xE4\xF0\x83\xC4\x04\x55\x8B\x6B\x2A\x89\x6C\x24\x2A\x8B\xEC\x81\xEC\x78\x02\x00\x00\x56\x57\x8B\xF9\x8B\x8F\x2A\x2A\x2A\x2A"
+                // 53 8B DC 83 EC 08 83 E4 F0 83 C4 04 55 8B 6B ? 89 6C 24 ? 8B EC 81 EC 78 02 00 00 56 57 8B F9 8B 8F ? ? ? ?
             }
         }
 
@@ -159,6 +155,12 @@
             "client CBaseCombatCharacter::m_flNextAttack"
             {
                 "windows"   "0xc70"
+            }
+
+            "CBaseFilter::PassesFilterImpl"
+            {
+                "linux"     "199"
+                "windows"   "198"
             }
         }
 
@@ -202,9 +204,8 @@
                 }
                 "windows"
                 {
-                    "signature" "mov ecx,[IMoveHelper::sm_pSingleton]"
-                    "read"      "2" // &IMoveHelper::sm_pSingleton
-                    // "read"      "0" // *&IMoveHelper::sm_pSingleton // not needed???
+                    "signature" "mov [IMoveHelper::sm_pSingleton],MoveHelperServer()::s_MoveHelperServer"
+                    "read"      "6" // &MoveHelperServer()::s_MoveHelperServer
                 }
             }
         }

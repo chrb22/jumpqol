@@ -2432,7 +2432,7 @@ _required
 
 
 ConVar g_Required_ConVar_maxevents;
-Handle g_Required_Call_CBaseFilter__PassesFilter;
+Handle g_Required_Call_CBaseFilter__PassesFilterImpl;
 bool Required_Init()
 {
     g_globals = Globals(GameConfGetAddress(g_gameconf, "gpGlobals"));
@@ -2458,16 +2458,16 @@ bool Required_Init()
         return false;
 
     StartPrepSDKCall(SDKCall_Entity);
-    if (!PrepSDKCall_SetFromConf(g_gameconf, SDKConf_Signature, "CBaseFilter::PassesFilter"))
-        return SetError("Failed to prepare CBaseFilter::PassesFilter call.");
+    if (!PrepSDKCall_SetFromConf(g_gameconf, SDKConf_Virtual, "CBaseFilter::PassesFilterImpl"))
+        return SetError("Failed to prepare CBaseFilter::PassesFilterImpl call.");
 
     PrepSDKCall_AddParameter(SDKType_CBaseEntity, SDKPass_Pointer); // pCaller (trigger)
     PrepSDKCall_AddParameter(SDKType_CBaseEntity, SDKPass_Pointer); // pEntity (projectile)
 
     PrepSDKCall_SetReturnInfo(SDKType_Bool, SDKPass_Plain);
 
-    g_Required_Call_CBaseFilter__PassesFilter = EndPrepSDKCall();
-    if (g_Required_Call_CBaseFilter__PassesFilter == INVALID_HANDLE)
+    g_Required_Call_CBaseFilter__PassesFilterImpl = EndPrepSDKCall();
+    if (g_Required_Call_CBaseFilter__PassesFilterImpl == INVALID_HANDLE)
         return SetError("Failed to prepare CBaseFilter::PassesFilter call.");
 
     return true;
@@ -2586,7 +2586,7 @@ bool Required_CheckTriggerFilter(int trigger, any entity)
 
     bool filters = false;
     if (filter != -1 && !negated)
-        filters = SDKCall(g_Required_Call_CBaseFilter__PassesFilter, filter, trigger, entity);
+        filters = SDKCall(g_Required_Call_CBaseFilter__PassesFilterImpl, filter, trigger, entity);
 
     if (filters) {
         ProjectileInfo proj; proj = FindProjectile(entity);
