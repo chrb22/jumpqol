@@ -12,7 +12,7 @@ public Plugin myinfo =
     name = "JumpQoL",
     author = "ILDPRUT",
     description = "Adds various improvements to jumping.",
-    version = "1.1.2",
+    version = "1.1.3",
 }
 
 #define DEBUG 0
@@ -2568,7 +2568,7 @@ MRESReturn Required_Detour_Post_Physics_SimulateEntity(DHookParam hParams)
     float vel[3];
     GetEntPropVector(entity, Prop_Data, "m_vecAbsOrigin", pos);
     GetEntPropVector(entity, Prop_Data, "m_vecAbsVelocity", vel);
-    TR_EnumerateEntitiesSphere(pos, 5.0*GetVectorLength(vel)*g_globals.interval_per_tick, PARTITION_TRIGGER_EDICTS, Required_CheckTriggerFilter, entity);
+    TR_EnumerateEntitiesSphere(pos, 2.0*GetVectorLength(vel)*g_globals.interval_per_tick, PARTITION_TRIGGER_EDICTS, Required_CheckTriggerFilter, entity);
 
     return MRES_Ignored;
 }
@@ -2588,20 +2588,35 @@ bool Required_CheckTriggerFilter(int trigger, any entity)
     if (filter != -1 && !negated)
         filters = SDKCall(g_Required_Call_CBaseFilter__PassesFilterImpl, filter, trigger, entity);
 
-    if (filters) {
-        ProjectileInfo proj; proj = FindProjectile(entity);
+    if (!filters)
+        return true;
 
-        #if DEBUG
-        if (g_debug_output != -1 && proj.client == g_debug_target && debug_toggles[DEBUG_MANIP]) {
-            PrintToConsole(g_debug_output, "manip %d - trigger - proj: %d, trigger: %d, classname: %s", g_tickcount_frame, entity, trigger, classname);
-        }
-        #endif
+    float pos[3];
+    float vel[3];
+    float disp[3];
+    GetEntPropVector(entity, Prop_Data, "m_vecAbsOrigin", pos);
+    GetEntPropVector(entity, Prop_Data, "m_vecAbsVelocity", vel);
+    ScaleVector(vel, 2.0*g_globals.interval_per_tick);
+    AddVectors(pos, vel, disp);
+    TR_ClipRayToEntity(pos, disp, MASK_ALL, RayType_EndPoint, trigger);
+    if (!TR_DidHit())
+        return true;
 
-        if (g_projs[proj.client][proj.index].frame_manipulated < g_tickcount_frame)
-            g_projs[proj.client][proj.index].frame_manipulated = g_tickcount_frame;
+    ProjectileInfo proj; proj = FindProjectile(entity);
+
+    #if DEBUG
+    if (g_debug_output != -1 && proj.client == g_debug_target && debug_toggles[DEBUG_MANIP]) {
+        PrintToConsole(g_debug_output, "manip %d - trigger - proj: %d, trigger: %d, classname: %s", g_tickcount_frame, entity, trigger, classname);
     }
+    #endif
 
-    return true;
+    char name[256];
+    GetEntPropString(filter, Prop_Data, "m_iName", name, sizeof(name));
+
+    if (g_projs[proj.client][proj.index].frame_manipulated < g_tickcount_frame)
+        g_projs[proj.client][proj.index].frame_manipulated = g_tickcount_frame;
+
+    return false;
 }
 
 
