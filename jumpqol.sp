@@ -12,7 +12,7 @@ public Plugin myinfo =
     name = "JumpQoL",
     author = "ILDPRUT",
     description = "Adds various improvements to jumping.",
-    version = "1.1.3",
+    version = "1.1.4",
 }
 
 #define DEBUG 0
@@ -2707,7 +2707,7 @@ MRESReturn Required_Detour_Pre_CEventQueue__ServiceEvents(Address pThis)
         firetimes[num] = RoundToCeil(event.m_flFireTime / g_globals.interval_per_tick);
 
         num++;
-        if (maxevents != -1 && num >= maxevents)
+        if (maxevents != -1 && num >= maxevents || num >= sizeof(targets))
             break;
 
         event = event.m_pNext;
