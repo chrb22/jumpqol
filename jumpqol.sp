@@ -2568,7 +2568,7 @@ MRESReturn Required_Detour_Post_Physics_SimulateEntity(DHookParam hParams)
     float vel[3];
     GetEntPropVector(entity, Prop_Data, "m_vecAbsOrigin", pos);
     GetEntPropVector(entity, Prop_Data, "m_vecAbsVelocity", vel);
-    TR_EnumerateEntitiesSphere(pos, 2.0*GetVectorLength(vel)*g_globals.interval_per_tick, PARTITION_TRIGGER_EDICTS, Required_CheckTriggerFilter, entity);
+    TR_EnumerateEntitiesSphere(pos, 5.0*GetVectorLength(vel)*g_globals.interval_per_tick, PARTITION_TRIGGER_EDICTS, Required_CheckTriggerFilter, entity);
 
     return MRES_Ignored;
 }
@@ -2591,12 +2591,14 @@ bool Required_CheckTriggerFilter(int trigger, any entity)
     if (!filters)
         return true;
 
+    float look_ahead_ticks = StrEqual(classname, "trigger_push") ? 5.0 : 2.0;
+
     float pos[3];
     float vel[3];
     float disp[3];
     GetEntPropVector(entity, Prop_Data, "m_vecAbsOrigin", pos);
     GetEntPropVector(entity, Prop_Data, "m_vecAbsVelocity", vel);
-    ScaleVector(vel, 2.0*g_globals.interval_per_tick);
+    ScaleVector(vel, look_ahead_ticks*g_globals.interval_per_tick);
     AddVectors(pos, vel, disp);
     TR_ClipRayToEntity(pos, disp, MASK_ALL, RayType_EndPoint, trigger);
     if (!TR_DidHit())
@@ -2609,9 +2611,6 @@ bool Required_CheckTriggerFilter(int trigger, any entity)
         PrintToConsole(g_debug_output, "manip %d - trigger - proj: %d, trigger: %d, classname: %s", g_tickcount_frame, entity, trigger, classname);
     }
     #endif
-
-    char name[256];
-    GetEntPropString(filter, Prop_Data, "m_iName", name, sizeof(name));
 
     if (g_projs[proj.client][proj.index].frame_manipulated < g_tickcount_frame)
         g_projs[proj.client][proj.index].frame_manipulated = g_tickcount_frame;
