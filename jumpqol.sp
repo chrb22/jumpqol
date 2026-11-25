@@ -2789,13 +2789,16 @@ public void OnPlayerRunCmdPost(int client, int buttons, int impulse, const float
     g_numnewprojs[client] = 0;
 }
 
-public void OnSendClientMessages()
+public void OnCheckTransmit(int client, TransmitBitVec transmitted)
 {
+    if (!IsActivePlayer(client))
+        return;
+    
     if (g_settings[SETTING_SYNC].numusing != 0)
-        Sync_OnSendClientMessages();
+        Sync_OnCheckTransmit(client);
 
     if (g_settings[SETTING_FAKEDELAY].numusing != 0)
-        Fakedelay_OnSendClientMessages();
+        Fakedelay_OnCheckTransmit(client);
 }
 
 
@@ -3920,48 +3923,43 @@ int SendProxySimulationTime(int entity)
     return addt;
 }
 
-void Sync_OnSendClientMessages()
+void Sync_OnCheckTransmit(int client)
 {
-    for (int client = 1; client <= MaxClients; client++) {
-        if (!IsActivePlayer(client))
+    if (!g_sessions[client].sync)
+        return;
+
+    for (int i = 0; i < g_numprojs[client]; i++) {
+        int entity = g_projs[client][i].Entity();
+        if (entity == -1)
             continue;
 
-        if (!g_sessions[client].sync)
+        if (!g_projs[client][i].IsPredictable())
             continue;
 
-        for (int i = 0; i < g_numprojs[client]; i++) {
-            int entity = g_projs[client][i].Entity();
-            if (entity == -1)
-                continue;
+        // Marks entity as updated for the current frame for clients
+        SetSendVar(entity, -1, "m_flSimulationTime", SendVarInt(SendProxySimulationTime(entity)));
 
-            if (!g_projs[client][i].IsPredictable())
-                continue;
+        ProjectileState state;
+        state = g_projs[client][i].GetState(g_tickcount_frame);
 
-            // Marks entity as updated for the current frame for clients
-            SetSendVar(entity, -1, "m_flSimulationTime", SendVarInt(SendProxySimulationTime(entity)), 1);
+        ProjectileState state_prev;
+        state_prev = g_projs[client][i].GetState(g_tickcount_frame - 1);
 
-            ProjectileState state;
-            state = g_projs[client][i].GetState(g_tickcount_frame);
+        if (HasNetworkableProp(entity, "m_vecOrigin"))
+            if (!CompareVectors(state.pos, state_prev.pos))
+                SetSendVar(entity, -1, "m_vecOrigin", SendVarVector(state.pos));
 
-            ProjectileState state_prev;
-            state_prev = g_projs[client][i].GetState(g_tickcount_frame - 1);
+        if (HasNetworkableProp(entity, "m_angRotation"))
+            if (!CompareVectors(state.rot, state_prev.rot))
+                SetSendVar(entity, -1, "m_angRotation", SendVarVector(SendProxyQAngles(state.rot)));
 
-            if (HasNetworkableProp(entity, "m_vecOrigin"))
-                if (!CompareVectors(state.pos, state_prev.pos))
-                    SetSendVar(entity, -1, "m_vecOrigin", SendVarVector(state.pos), 1);
+        if (HasNetworkableProp(entity, "m_vecVelocity"))
+            if (!CompareVectors(state.vel, state_prev.vel))
+                SetSendVar(entity, -1, "m_vecVelocity", SendVarVector(state.vel));
 
-            if (HasNetworkableProp(entity, "m_angRotation"))
-                if (!CompareVectors(state.rot, state_prev.rot))
-                    SetSendVar(entity, -1, "m_angRotation", SendVarVector(SendProxyQAngles(state.rot)), 1);
-
-            if (HasNetworkableProp(entity, "m_vecVelocity"))
-                if (!CompareVectors(state.vel, state_prev.vel))
-                    SetSendVar(entity, -1, "m_vecVelocity", SendVarVector(state.vel), 1);
-
-            if (HasNetworkableProp(entity, "m_vecAngVelocity"))
-                if (!CompareVectors(state.angvel, state_prev.angvel))
-                    SetSendVar(entity, -1, "m_vecAngVelocity", SendVarVector(SendProxyQAngles(state.angvel)), 1);
-        }
+        if (HasNetworkableProp(entity, "m_vecAngVelocity"))
+            if (!CompareVectors(state.angvel, state_prev.angvel))
+                SetSendVar(entity, -1, "m_vecAngVelocity", SendVarVector(SendProxyQAngles(state.angvel)));
     }
 }
 
@@ -4017,46 +4015,41 @@ bool Fakedelay_Init()
     return true;
 }
 
-void Fakedelay_OnSendClientMessages()
+void Fakedelay_OnCheckTransmit(int client)
 {
-    for (int client = 1; client <= MaxClients; client++) {
-        if (!IsActivePlayer(client))
+    if (g_sessions[client].fakedelay < 0)
+        return;
+
+    for (int i = 0; i < g_numprojs[client]; i++) {
+        int entity = g_projs[client][i].Entity();
+        if (entity == -1)
             continue;
 
-        if (g_sessions[client].fakedelay < 0)
+        if (!g_projs[client][i].IsPredictable())
             continue;
 
-        for (int i = 0; i < g_numprojs[client]; i++) {
-            int entity = g_projs[client][i].Entity();
-            if (entity == -1)
-                continue;
+        int frame = g_tickcount_frame + g_projs[client][i].clientdelay - RoundToCeil(g_sessions[client].fakedelay / 1000.0 / g_globals.interval_per_tick);
 
-            if (!g_projs[client][i].IsPredictable())
-                continue;
+        ProjectileState state;
+        state = g_projs[client][i].GetState(frame);
 
-            int frame = g_tickcount_frame + g_projs[client][i].clientdelay - RoundToCeil(g_sessions[client].fakedelay / 1000.0 / g_globals.interval_per_tick);
+        ProjectileState state_prev;
+        state_prev = g_projs[client][i].GetState(frame - 1);
 
-            ProjectileState state;
-            state = g_projs[client][i].GetState(frame);
+        if (HasNetworkableProp(entity, "m_vecOrigin"))
+            if (!CompareVectors(state.pos, state_prev.pos))
+                SetSendVar(entity, client, "m_vecOrigin", SendVarVector(state.pos));
 
-            ProjectileState state_prev;
-            state_prev = g_projs[client][i].GetState(frame - 1);
+        if (HasNetworkableProp(entity, "m_angRotation"))
+            if (!CompareVectors(state.rot, state_prev.rot))
+                SetSendVar(entity, client, "m_angRotation", SendVarVector(SendProxyQAngles(state.rot)));
 
-            if (HasNetworkableProp(entity, "m_vecOrigin"))
-                if (!CompareVectors(state.pos, state_prev.pos))
-                    SetSendVar(entity, client, "m_vecOrigin", SendVarVector(state.pos), 3);
+        if (HasNetworkableProp(entity, "m_vecVelocity"))
+            if (!CompareVectors(state.vel, state_prev.vel))
+                SetSendVar(entity, client, "m_vecVelocity", SendVarVector(state.vel));
 
-            if (HasNetworkableProp(entity, "m_angRotation"))
-                if (!CompareVectors(state.rot, state_prev.rot))
-                    SetSendVar(entity, client, "m_angRotation", SendVarVector(SendProxyQAngles(state.rot)), 3);
-
-            if (HasNetworkableProp(entity, "m_vecVelocity"))
-                if (!CompareVectors(state.vel, state_prev.vel))
-                    SetSendVar(entity, client, "m_vecVelocity", SendVarVector(state.vel), 3);
-
-            if (HasNetworkableProp(entity, "m_vecAngVelocity"))
-                if (!CompareVectors(state.angvel, state_prev.angvel))
-                    SetSendVar(entity, client, "m_vecAngVelocity", SendVarVector(SendProxyQAngles(state.angvel)), 3);
-        }
+        if (HasNetworkableProp(entity, "m_vecAngVelocity"))
+            if (!CompareVectors(state.angvel, state_prev.angvel))
+                SetSendVar(entity, client, "m_vecAngVelocity", SendVarVector(SendProxyQAngles(state.angvel)));
     }
 }
